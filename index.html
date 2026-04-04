@@ -1,0 +1,3094 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>GameForge v5 – AI Engine</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="gameforge-script.js" defer></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+:root{
+  --bg:#080810;--panel:#0f0f1a;--panel2:#13131f;--border:#1e1e32;
+  --accent:#00f5d4;--accent2:#f72585;--accent3:#ffd60a;--accent4:#7b2fff;
+  --text:#dde1ff;--muted:#404060;--tile:36px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;}
+
+/* SPLASH */
+#splash{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;animation:splashOut 0.6s 2.6s ease forwards;}
+@keyframes splashOut{to{opacity:0;pointer-events:none;}}
+.splash-logo{font-family:'Orbitron',sans-serif;font-size:2.4em;font-weight:900;color:var(--accent);text-shadow:0 0 40px var(--accent);letter-spacing:0.1em;}
+.splash-sub{font-size:0.72em;color:var(--muted);letter-spacing:0.3em;}
+.splash-ver{font-size:0.62em;color:var(--accent4);letter-spacing:0.18em;}
+.splash-bar-bg{width:240px;height:2px;background:#111;border-radius:2px;overflow:hidden;margin-top:6px;}
+.splash-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent4));animation:fillBar 2.4s ease forwards;}
+@keyframes fillBar{from{width:0}to{width:100%}}
+
+/* LAYOUT */
+#app{display:flex;flex-direction:column;height:100vh;}
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:6px 9px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;gap:5px;}
+.logo{font-family:'Orbitron',sans-serif;font-size:0.8em;font-weight:700;color:var(--accent);letter-spacing:0.1em;}
+.top-actions{display:flex;gap:4px;flex-wrap:wrap;}
+.btn{font-family:'Rajdhani',sans-serif;font-size:0.7em;font-weight:700;padding:5px 9px;border-radius:6px;border:none;cursor:pointer;transition:transform 0.1s;letter-spacing:0.04em;}
+.btn:active{transform:scale(0.93);}
+.btn-accent{background:var(--accent);color:#000;}
+.btn-pink{background:var(--accent2);color:#fff;}
+.btn-yellow{background:var(--accent3);color:#000;}
+.btn-purple{background:var(--accent4);color:#fff;}
+.btn-muted{background:#1a1a2a;color:var(--text);border:1px solid var(--border);}
+
+/* TABS */
+#tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;}
+#tabs::-webkit-scrollbar{display:none;}
+.tab{flex-shrink:0;text-align:center;padding:8px 9px;font-size:0.63em;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;letter-spacing:0.07em;white-space:nowrap;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+/* PANELS */
+#panels{flex:1;overflow:hidden;position:relative;}
+.panel{display:none;height:100%;flex-direction:column;overflow:hidden;}
+.panel.active{display:flex;}
+
+/* MODE BAR */
+#mode-bar{display:flex;gap:5px;padding:7px 9px;background:var(--panel2);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;}
+.mode-btn{flex:1;padding:6px;border-radius:7px;background:#1a1a2a;border:1px solid var(--border);color:var(--muted);font-family:'Orbitron',sans-serif;font-size:0.58em;font-weight:700;cursor:pointer;text-align:center;transition:all 0.2s;letter-spacing:0.04em;}
+.mode-btn.active{background:var(--accent4);border-color:var(--accent4);color:#fff;}
+
+/* SCENE */
+#scene-wrap{flex:1;overflow:hidden;position:relative;background:var(--bg);}
+#scene-canvas-2d{position:absolute;inset:0;width:100%;height:100%;
+  background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:var(--tile) var(--tile);}
+#scene-canvas-3d{position:absolute;inset:0;width:100%;height:100%;display:none;}
+#scene-toolbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:5px;background:rgba(8,8,16,0.95);border:1px solid var(--border);border-radius:13px;padding:6px 9px;backdrop-filter:blur(12px);z-index:10;}
+.tool-btn{width:40px;height:40px;border-radius:9px;border:1px solid var(--border);background:#1a1a2a;color:var(--text);font-size:1.1em;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s;}
+.tool-btn.active,.tool-btn:active{background:var(--accent);border-color:var(--accent);color:#000;}
+#props-panel{height:155px;background:var(--panel);border-top:1px solid var(--border);overflow-y:auto;padding:7px 9px;flex-shrink:0;}
+#props-panel h3{font-size:0.6em;color:var(--muted);letter-spacing:0.15em;margin-bottom:6px;font-family:'Orbitron',sans-serif;}
+.prop-row{display:flex;align-items:center;gap:5px;margin-bottom:5px;}
+.prop-label{font-size:0.68em;color:var(--muted);width:50px;flex-shrink:0;font-weight:700;}
+.prop-input{flex:1;background:#1a1a28;border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:5px;font-size:0.72em;font-family:'Rajdhani',sans-serif;}
+.prop-input:focus{outline:none;border-color:var(--accent);}
+.color-swatch{display:flex;gap:4px;flex-wrap:wrap;}
+.swatch{width:20px;height:20px;border-radius:4px;cursor:pointer;border:2px solid transparent;}
+.swatch.selected{border-color:#fff;}
+
+/* OBJECTS */
+#objects-list{flex:1;overflow-y:auto;padding:7px;}
+.obj-item{display:flex;align-items:center;padding:8px 9px;margin-bottom:4px;background:#0f0f1e;border:1px solid var(--border);border-radius:9px;cursor:pointer;transition:border-color 0.15s;}
+.obj-item:active,.obj-item.selected{border-color:var(--accent);}
+.obj-icon{font-size:1.2em;margin-right:8px;width:24px;text-align:center;}
+.obj-info{flex:1;}
+.obj-name{font-size:0.8em;font-weight:700;}
+.obj-type{font-size:0.62em;color:var(--muted);}
+.obj-del{color:var(--accent2);font-size:0.95em;padding:3px 7px;}
+.empty-state{text-align:center;color:var(--muted);font-size:0.78em;margin-top:24px;line-height:2;}
+#add-panel{padding:7px 9px;background:var(--panel);border-top:1px solid var(--border);flex-shrink:0;max-height:210px;overflow-y:auto;}
+#add-panel h3{font-size:0.6em;color:var(--muted);letter-spacing:0.13em;margin-bottom:6px;font-family:'Orbitron',sans-serif;}
+.cat-label{font-size:0.58em;color:var(--accent4);font-weight:700;letter-spacing:0.12em;margin:6px 0 3px;font-family:'Orbitron',sans-serif;}
+.add-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:4px;}
+.add-tile{background:#0f0f1e;border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7px 2px;gap:2px;cursor:pointer;transition:all 0.15s;font-size:1.3em;}
+.add-tile span{font-size:0.36em;color:var(--muted);font-weight:700;}
+.add-tile:active{background:var(--accent4);border-color:var(--accent4);}
+.add-tile:active span{color:#fff;}
+
+/* CODE */
+#code-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#code-header{padding:6px 9px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:5px;flex-shrink:0;}
+#code-header select{background:#1a1a28;border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:5px;font-size:0.72em;flex:1;font-family:'Rajdhani',sans-serif;}
+#script-name-input{background:#1a1a28;border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:5px;font-size:0.72em;width:90px;font-family:'Rajdhani',sans-serif;}
+#script-name-input:focus{outline:none;border-color:var(--accent);}
+#code-editor{flex:1;background:#060610;color:#b8c5ff;font-family:'Courier New',monospace;font-size:0.76em;line-height:1.65;padding:11px;resize:none;border:none;outline:none;overflow-y:auto;tab-size:2;}
+#code-footer{padding:6px 9px;background:var(--panel);border-top:1px solid var(--border);display:flex;gap:5px;align-items:center;flex-shrink:0;}
+#code-output{flex:1;font-family:'Courier New',monospace;font-size:0.68em;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* MONEY EDITOR */
+#money-panel-content{flex:1;overflow-y:auto;padding:10px;}
+.money-section{margin-bottom:16px;}
+.money-section h3{font-family:'Orbitron',sans-serif;font-size:0.62em;color:var(--accent3);letter-spacing:0.13em;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.money-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;background:#0f0f1e;padding:8px 10px;border-radius:9px;border:1px solid var(--border);}
+.money-row label{font-size:0.74em;font-weight:700;color:var(--text);min-width:80px;}
+.money-row input[type=number]{flex:1;background:#1a1a28;border:1px solid var(--border);color:var(--accent3);padding:5px 8px;border-radius:6px;font-size:0.82em;font-family:'Orbitron',sans-serif;font-weight:700;text-align:center;}
+.money-row input[type=number]:focus{outline:none;border-color:var(--accent3);}
+.money-row input[type=range]{flex:1;accent-color:var(--accent3);}
+.money-row span{font-size:0.72em;color:var(--accent3);min-width:50px;text-align:right;font-family:'Orbitron',sans-serif;}
+.money-presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+.preset-btn{padding:6px 12px;border-radius:7px;border:1px solid var(--accent3);background:transparent;color:var(--accent3);font-family:'Orbitron',sans-serif;font-size:0.6em;font-weight:700;cursor:pointer;transition:all 0.15s;}
+.preset-btn:active{background:var(--accent3);color:#000;}
+.money-obj-list{display:flex;flex-direction:column;gap:5px;}
+.money-obj-item{display:flex;align-items:center;gap:8px;background:#0f0f1e;border:1px solid var(--border);border-radius:9px;padding:8px 10px;}
+.money-obj-item .icon{font-size:1.3em;}
+.money-obj-item .info{flex:1;}
+.money-obj-item .name{font-size:0.78em;font-weight:700;}
+.money-obj-item input{width:90px;background:#1a1a28;border:1px solid var(--border);color:var(--accent3);padding:4px 7px;border-radius:5px;font-size:0.78em;font-family:'Orbitron',sans-serif;text-align:center;}
+.money-obj-item input:focus{outline:none;border-color:var(--accent3);}
+.money-apply-btn{padding:5px 10px;border-radius:6px;border:none;background:var(--accent3);color:#000;font-family:'Rajdhani',sans-serif;font-size:0.7em;font-weight:700;cursor:pointer;}
+
+/* SAVE */
+#save-panel-content{flex:1;overflow-y:auto;padding:9px;}
+.save-section{margin-bottom:14px;}
+.save-section h3{font-family:'Orbitron',sans-serif;font-size:0.62em;color:var(--accent);letter-spacing:0.13em;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.save-row{display:flex;gap:7px;align-items:center;margin-bottom:7px;}
+.save-row label{font-size:0.75em;color:var(--muted);font-weight:700;width:70px;flex-shrink:0;}
+.save-row input{flex:1;background:#1a1a28;border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:0.75em;font-family:'Rajdhani',sans-serif;}
+.save-row input:focus{outline:none;border-color:var(--accent);}
+.save-btn-row{display:flex;gap:6px;flex-wrap:wrap;}
+.save-big-btn{flex:1;min-width:55px;padding:10px 5px;border-radius:9px;border:none;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:0.55em;font-weight:700;letter-spacing:0.04em;display:flex;flex-direction:column;align-items:center;gap:3px;transition:transform 0.15s;}
+.save-big-btn:active{transform:scale(0.94);}
+.save-big-btn .icon{font-size:1.7em;}
+.sbb-green{background:linear-gradient(135deg,#00c853,#00695c);color:#fff;}
+.sbb-blue{background:linear-gradient(135deg,#1565c0,#283593);color:#fff;}
+.sbb-orange{background:linear-gradient(135deg,#e65100,#bf360c);color:#fff;}
+.sbb-purple{background:linear-gradient(135deg,#6a1b9a,#4527a0);color:#fff;}
+.project-list{display:flex;flex-direction:column;gap:5px;}
+.proj-item{display:flex;align-items:center;background:#0f0f1e;border:1px solid var(--border);border-radius:8px;padding:8px 10px;gap:8px;}
+.proj-name{flex:1;font-size:0.8em;font-weight:700;}
+.proj-date{font-size:0.62em;color:var(--muted);}
+.proj-btns{display:flex;gap:4px;}
+.proj-btns button{font-size:0.65em;padding:4px 7px;border-radius:5px;border:none;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;}
+.load-btn{background:var(--accent);color:#000;}
+.del-btn{background:var(--accent2);color:#fff;}
+.no-projects{text-align:center;color:var(--muted);font-size:0.75em;padding:16px;line-height:1.8;}
+.status-msg{padding:7px 10px;border-radius:7px;font-size:0.76em;font-weight:700;margin-bottom:8px;display:none;}
+.status-ok{background:#00c85322;border:1px solid #00c853;color:#00c853;}
+.status-err{background:#f7258522;border:1px solid var(--accent2);color:var(--accent2);}
+
+/* GAME */
+#game-wrap{flex:1;overflow:hidden;position:relative;background:#000;}
+#game-canvas-2d{width:100%;height:100%;display:block;position:absolute;inset:0;}
+#game-canvas-3d{width:100%;height:100%;display:none;position:absolute;inset:0;}
+#game-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:20;}
+#game-overlay h2{font-family:'Orbitron',sans-serif;font-size:1.2em;color:var(--accent);}
+#game-overlay p{color:var(--muted);font-size:0.78em;text-align:center;padding:0 18px;line-height:1.6;}
+#game-hud{position:absolute;top:8px;left:8px;right:8px;display:none;justify-content:space-between;pointer-events:none;flex-wrap:wrap;gap:4px;z-index:10;}
+.hud-chip{background:rgba(0,0,0,0.75);border:1px solid var(--border);border-radius:7px;padding:3px 8px;font-family:'Orbitron',sans-serif;font-size:0.58em;color:var(--accent);}
+.hud-chip.money{color:var(--accent3);}
+.hud-chip.time-chip{color:#87ceeb;}
+#mode-indicator{position:absolute;top:8px;right:8px;background:rgba(123,47,255,0.3);border:1px solid var(--accent4);border-radius:6px;padding:3px 8px;font-family:'Orbitron',sans-serif;font-size:0.55em;color:var(--accent4);z-index:11;}
+#dpad{position:absolute;bottom:14px;left:10px;display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:3px;z-index:10;}
+.dpad-btn{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:white;font-size:1em;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;}
+.dpad-btn:active{background:rgba(0,245,212,0.25);border-color:var(--accent);}
+#action-btns{position:absolute;bottom:14px;right:10px;display:none;gap:9px;z-index:10;}
+.action-btn{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',sans-serif;font-size:0.72em;font-weight:700;cursor:pointer;user-select:none;border:2px solid;}
+.action-btn.a{background:rgba(0,255,100,0.12);border-color:#00ff64;color:#00ff64;}
+.action-btn.b{background:rgba(247,37,133,0.12);border-color:var(--accent2);color:var(--accent2);}
+.action-btn.e{background:rgba(255,214,10,0.12);border-color:var(--accent3);color:var(--accent3);}
+.action-btn:active{opacity:0.6;transform:scale(0.88);}
+#gas-btn{position:absolute;bottom:78px;right:10px;width:54px;height:54px;border-radius:50%;background:rgba(0,245,212,0.15);border:2px solid var(--accent);color:var(--accent);font-size:1.3em;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:10;}
+#gas-btn:active{background:rgba(0,245,212,0.4);}
+#cam-btns{position:absolute;top:36px;right:8px;display:none;flex-direction:column;gap:4px;z-index:11;}
+.cam-btn{padding:4px 8px;border-radius:5px;background:rgba(0,0,0,0.6);border:1px solid var(--border);color:var(--muted);font-family:'Orbitron',sans-serif;font-size:0.52em;cursor:pointer;}
+.cam-btn.active{border-color:var(--accent4);color:var(--accent4);}
+
+/* SHOP */
+#shop-overlay{position:absolute;inset:0;display:none;flex-direction:column;background:rgba(0,0,0,0.92);backdrop-filter:blur(10px);z-index:15;}
+#shop-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+#shop-header h2{font-family:'Orbitron',sans-serif;font-size:1em;color:var(--accent3);}
+#shop-balance{font-family:'Orbitron',sans-serif;font-size:0.8em;color:var(--accent3);}
+#shop-items{flex:1;overflow-y:auto;padding:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+.shop-item{background:#1a1a2a;border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;transition:border-color 0.2s;}
+.shop-item:active{border-color:var(--accent3);}
+.shop-item .si-icon{font-size:2em;}
+.shop-item .si-name{font-size:0.72em;font-weight:700;text-align:center;}
+.shop-item .si-price{font-size:0.68em;color:var(--accent3);font-family:'Orbitron',sans-serif;}
+.shop-item .si-desc{font-size:0.6em;color:var(--muted);text-align:center;}
+#shop-close{padding:8px 18px;border-radius:8px;background:var(--accent2);color:#fff;border:none;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:0.7em;font-weight:700;}
+#shop-msg{padding:6px 14px;font-size:0.72em;color:var(--accent3);font-family:'Orbitron',sans-serif;text-align:center;min-height:26px;}
+
+/* SETTINGS PANEL */
+#settings-content{flex:1;overflow-y:auto;padding:10px;}
+.settings-section{margin-bottom:16px;}
+.settings-section h3{font-family:'Orbitron',sans-serif;font-size:0.62em;color:var(--accent);letter-spacing:0.13em;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.setting-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;background:#0f0f1e;padding:9px 11px;border-radius:9px;border:1px solid var(--border);}
+.setting-row label{font-size:0.74em;font-weight:700;color:var(--text);flex:1;}
+.setting-row .setting-desc{font-size:0.62em;color:var(--muted);display:block;margin-top:2px;}
+.toggle-wrap{display:flex;gap:4px;}
+.toggle-opt{padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:#1a1a28;color:var(--muted);font-family:'Orbitron',sans-serif;font-size:0.58em;font-weight:700;cursor:pointer;transition:all 0.18s;letter-spacing:0.04em;}
+.toggle-opt.active{background:var(--accent4);border-color:var(--accent4);color:#fff;}
+.toggle-opt.active-green{background:var(--accent);border-color:var(--accent);color:#000;}
+.setting-row input[type=range]{flex:1;accent-color:var(--accent4);}
+.setting-row select{flex:1;background:#1a1a28;border:1px solid var(--border);color:var(--text);padding:5px 7px;border-radius:6px;font-size:0.73em;font-family:'Rajdhani',sans-serif;}
+.settings-apply-btn{width:100%;padding:10px;border-radius:9px;border:none;background:linear-gradient(135deg,var(--accent4),var(--accent2));color:#fff;font-family:'Orbitron',sans-serif;font-size:0.65em;font-weight:700;cursor:pointer;letter-spacing:0.08em;margin-top:4px;}
+
+/* PC BUILDER OVERLAY */
+#pc-builder{position:absolute;inset:0;display:none;flex-direction:column;background:rgba(2,2,12,0.97);backdrop-filter:blur(14px);z-index:30;}
+#pc-builder-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+#pc-builder-header h2{font-family:'Orbitron',sans-serif;font-size:0.95em;color:var(--accent);letter-spacing:0.1em;}
+#pc-builder-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px;}
+#pc-builder-footer{padding:8px 12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.pc-budget{font-family:'Orbitron',sans-serif;font-size:0.75em;color:var(--accent3);flex:1;}
+.pc-total{font-family:'Orbitron',sans-serif;font-size:0.72em;color:var(--accent2);}
+.pc-section{background:#0d0d1e;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.pc-section-header{padding:8px 12px;background:#1a1a2a;display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
+.pc-section-header h4{font-family:'Orbitron',sans-serif;font-size:0.62em;color:var(--accent4);letter-spacing:0.1em;}
+.pc-section-selected{font-size:0.65em;color:var(--accent3);font-family:'Orbitron',sans-serif;}
+.pc-items{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;padding:8px;}
+.pc-item{background:#13131f;border:1px solid var(--border);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:3px;cursor:pointer;transition:border-color 0.15s,background 0.15s;position:relative;}
+.pc-item:active,.pc-item.selected{border-color:var(--accent);background:#1a2a1a;}
+.pc-item.selected::after{content:'✓';position:absolute;top:5px;right:7px;color:var(--accent);font-size:0.8em;font-weight:700;}
+.pc-item .pc-icon{font-size:1.4em;}
+.pc-item .pc-name{font-size:0.7em;font-weight:700;line-height:1.2;}
+.pc-item .pc-specs{font-size:0.6em;color:var(--muted);line-height:1.4;}
+.pc-item .pc-price{font-size:0.65em;color:var(--accent3);font-family:'Orbitron',sans-serif;margin-top:2px;}
+.pc-item .pc-perf{display:flex;align-items:center;gap:4px;margin-top:3px;}
+.pc-item .pc-bar-bg{flex:1;height:3px;background:#222;border-radius:2px;overflow:hidden;}
+.pc-item .pc-bar{height:100%;border-radius:2px;transition:width 0.3s;}
+.pc-stats-panel{background:#0d0d1e;border:1px solid var(--accent4)33;border-radius:10px;padding:10px;}
+.pc-stats-panel h4{font-family:'Orbitron',sans-serif;font-size:0.6em;color:var(--accent4);letter-spacing:0.1em;margin-bottom:8px;}
+.pc-stat-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.pc-stat-label{font-size:0.65em;color:var(--muted);width:70px;font-weight:700;}
+.pc-stat-bar-bg{flex:1;height:6px;background:#1a1a28;border-radius:3px;overflow:hidden;}
+.pc-stat-bar{height:100%;border-radius:3px;transition:width 0.5s;}
+.pc-stat-val{font-size:0.62em;color:var(--accent);font-family:'Orbitron',sans-serif;width:36px;text-align:right;}
+.pc-build-btn{flex:1;padding:10px;border-radius:9px;border:none;background:linear-gradient(135deg,var(--accent),#00a896);color:#000;font-family:'Orbitron',sans-serif;font-size:0.65em;font-weight:700;cursor:pointer;letter-spacing:0.06em;}
+.pc-build-btn:disabled{background:#222;color:var(--muted);cursor:not-allowed;}
+.pc-close-btn{padding:10px 16px;border-radius:9px;border:none;background:var(--accent2);color:#fff;font-family:'Orbitron',sans-serif;font-size:0.62em;font-weight:700;cursor:pointer;}
+.pc-built-badge{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,245,212,0.95);color:#000;padding:20px 28px;border-radius:14px;text-align:center;font-family:'Orbitron',sans-serif;z-index:5;}
+.pc-built-badge h3{font-size:1em;margin-bottom:6px;}
+.pc-built-badge p{font-size:0.7em;color:#006;line-height:1.6;}
+
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* PAINT */
+#paint-panel-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#paint-toolbar{display:flex;gap:5px;padding:7px 9px;background:var(--panel2);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap;}
+.paint-color{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all 0.15s;flex-shrink:0;-webkit-user-select:none;user-select:none;}
+.paint-color.selected{border-color:#fff;transform:scale(1.2);}
+#paint-canvas-wrap{flex:1;overflow:hidden;position:relative;background:#0a0a18;}
+#paint-canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair;}
+.paint-tool-btn{padding:5px 9px;border-radius:7px;border:1px solid var(--border);background:#1a1a2a;color:var(--muted);font-family:'Orbitron',sans-serif;font-size:0.57em;font-weight:700;cursor:pointer;transition:all 0.15s;-webkit-user-select:none;user-select:none;}
+.paint-tool-btn.active{background:var(--accent4);border-color:var(--accent4);color:#fff;}
+
+/* CHAR EDITOR */
+#char-editor-content{flex:1;overflow-y:auto;padding:10px;}
+.char-section{margin-bottom:14px;}
+.char-section h3{font-family:'Orbitron',sans-serif;font-size:0.62em;color:var(--accent);letter-spacing:0.13em;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+#char-preview-canvas{border:1px solid var(--border);border-radius:10px;background:#0a0a18;display:block;margin:0 auto 12px;}
+.char-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;background:#0f0f1e;padding:8px 10px;border-radius:9px;border:1px solid var(--border);}
+.char-row label{font-size:0.73em;font-weight:700;color:var(--text);min-width:80px;}
+.char-row input[type=range]{flex:1;accent-color:var(--accent);}
+.char-row input[type=text],.char-row select{flex:1;background:#1a1a28;border:1px solid var(--border);color:var(--text);padding:4px 7px;border-radius:5px;font-size:0.73em;font-family:'Rajdhani',sans-serif;}
+.char-row input[type=text]:focus,.char-row select:focus{outline:none;border-color:var(--accent);}
+.char-row span{font-size:0.68em;color:var(--accent4);min-width:30px;text-align:right;font-family:'Orbitron',sans-serif;}
+.char-color-row{display:flex;gap:6px;flex-wrap:wrap;}
+.char-swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all 0.15s;}
+.char-swatch.selected{border-color:#fff;transform:scale(1.2);}
+.char-type-row{display:flex;gap:6px;flex-wrap:wrap;}
+.char-type-btn{padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:#1a1a2a;color:var(--muted);font-family:'Orbitron',sans-serif;font-size:0.57em;font-weight:700;cursor:pointer;transition:all 0.15s;-webkit-user-select:none;user-select:none;}
+.char-type-btn.active{background:var(--accent);border-color:var(--accent);color:#000;}
+.mechanic-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;background:#0f0f1e;padding:7px 10px;border-radius:8px;border:1px solid var(--border);}
+.mechanic-row label{font-size:0.7em;color:var(--text);flex:1;font-weight:700;}
+.mechanic-toggle{padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#1a1a2a;color:var(--muted);font-family:'Orbitron',sans-serif;font-size:0.56em;font-weight:700;cursor:pointer;transition:all 0.15s;-webkit-user-select:none;user-select:none;}
+.mechanic-toggle.on{background:var(--accent);border-color:var(--accent);color:#000;}
+.char-save-btn{width:100%;padding:10px;border-radius:9px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent4));color:#000;font-family:'Orbitron',sans-serif;font-size:0.65em;font-weight:700;cursor:pointer;margin-top:4px;}
+
+/* UPDATES */
+#updates-content{flex:1;overflow-y:auto;padding:10px;}
+.update-card{background:#0d0d1e;border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden;}
+.update-card.latest{border-color:var(--accent);}
+.update-header{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:#1a1a2a;flex-wrap:wrap;gap:6px;}
+.update-ver{font-family:'Orbitron',sans-serif;font-size:0.75em;font-weight:700;color:var(--accent);}
+.update-date{font-size:0.62em;color:var(--muted);}
+.update-badge{font-size:0.55em;padding:3px 8px;border-radius:10px;font-family:'Orbitron',sans-serif;font-weight:700;}
+.badge-new{background:var(--accent);color:#000;}.badge-fix{background:var(--accent3);color:#000;}.badge-feature{background:var(--accent4);color:#fff;}
+.update-body{padding:10px 14px;}
+.update-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;font-size:0.75em;line-height:1.5;}
+.update-item .text{color:var(--text);}.update-item .text b{color:var(--accent);}
+.upd-progress{padding:10px 14px;border-top:1px solid var(--border);background:#0a0a18;}
+.upd-progress h4{font-family:'Orbitron',sans-serif;font-size:0.58em;color:var(--muted);margin-bottom:6px;letter-spacing:0.1em;}
+.prog-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.prog-row label{font-size:0.65em;color:var(--muted);width:100px;flex-shrink:0;}
+.prog-bg{flex:1;height:5px;background:#1a1a28;border-radius:3px;overflow:hidden;}
+.prog-bar{height:100%;border-radius:3px;}
+.prog-val{font-size:0.6em;color:var(--accent4);font-family:'Orbitron',sans-serif;min-width:30px;text-align:right;}
+
+/* AI CHAT */
+#ai-panel-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
+#ai-messages{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:10px;}
+.ai-msg{display:flex;gap:8px;align-items:flex-start;animation:msgIn 0.3s ease;}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.ai-msg.user{flex-direction:row-reverse;}
+.ai-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1em;}
+.ai-avatar.bot{background:var(--accent4);border:2px solid var(--accent);}
+.ai-avatar.user{background:var(--accent2);border:2px solid var(--accent2);}
+.ai-bubble{max-width:78%;padding:9px 13px;border-radius:14px;font-size:0.78em;line-height:1.6;}
+.ai-bubble.bot{background:#1a1a2e;border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px;}
+.ai-bubble.user{background:var(--accent4);color:#fff;border-bottom-right-radius:4px;}
+.ai-bubble code{background:#0a0a18;padding:1px 5px;border-radius:4px;font-family:'Courier New',monospace;font-size:0.9em;color:var(--accent);}
+.ai-bubble pre{background:#0a0a18;padding:8px;border-radius:6px;overflow-x:auto;margin-top:6px;font-size:0.85em;color:#b8c5ff;font-family:'Courier New',monospace;}
+.ai-typing{display:flex;gap:4px;align-items:center;padding:10px 14px;background:#1a1a2e;border:1px solid var(--border);border-radius:14px;width:fit-content;}
+.ai-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:dotBounce 1.2s infinite;}
+.ai-dot:nth-child(2){animation-delay:0.2s;}.ai-dot:nth-child(3){animation-delay:0.4s;}
+@keyframes dotBounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-8px)}}
+#ai-input-row{display:flex;gap:7px;padding:9px 10px;background:var(--panel);border-top:1px solid var(--border);flex-shrink:0;}
+#ai-input{flex:1;background:#1a1a28;border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:22px;font-size:0.8em;font-family:'Rajdhani',sans-serif;outline:none;resize:none;max-height:80px;}
+#ai-input:focus{border-color:var(--accent);}
+#ai-send-btn{width:42px;height:42px;border-radius:50%;background:var(--accent);border:none;color:#000;font-size:1.2em;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:transform 0.1s;}
+#ai-send-btn:active{transform:scale(0.9);}
+.ai-suggestions{display:flex;gap:6px;padding:6px 10px;overflow-x:auto;flex-shrink:0;background:var(--panel);}
+.ai-suggestions::-webkit-scrollbar{display:none;}
+.ai-chip{padding:5px 12px;border-radius:14px;border:1px solid var(--border);background:#1a1a2a;color:var(--muted);font-size:0.65em;font-family:'Orbitron',sans-serif;white-space:nowrap;cursor:pointer;transition:all 0.15s;-webkit-user-select:none;user-select:none;}
+.ai-chip:active{background:var(--accent4);border-color:var(--accent4);color:#fff;}
+
+/* NOTIFICATION */
+#gf-notification{position:fixed;top:-100px;left:50%;transform:translateX(-50%);width:90%;max-width:380px;background:linear-gradient(135deg,#0f0f1a,#1a1a2e);border:1px solid var(--accent);border-radius:14px;padding:14px 16px;z-index:99999;box-shadow:0 8px 32px rgba(0,245,212,0.2);transition:top 0.5s cubic-bezier(0.34,1.56,0.64,1);display:flex;align-items:center;gap:12px;}
+#gf-notification.show{top:16px;}
+.notif-icon{font-size:2em;flex-shrink:0;}
+.notif-body{flex:1;}
+.notif-title{font-family:'Orbitron',sans-serif;font-size:0.72em;font-weight:700;color:var(--accent);margin-bottom:3px;}
+.notif-msg{font-size:0.7em;color:var(--muted);line-height:1.4;}
+.notif-close{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.06);border:none;color:var(--muted);font-size:1em;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.notif-close:active{background:var(--accent2);}
+.notif-action{margin-top:8px;font-size:0.65em;font-family:'Orbitron',sans-serif;color:var(--accent4);cursor:pointer;text-decoration:underline;display:inline-block;}
+
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div class="splash-logo">GAMEFORGE</div>
+  <div class="splash-sub">3D ENGINE + THREE.JS</div>
+  <div class="splash-ver">THREE.JS · 2D/3D SWITCH · MONEY EDITOR · SKRIPTY</div>
+  <div class="splash-bar-bg"><div class="splash-bar"></div></div>
+</div>
+
+<div id="app">
+  <div id="topbar">
+    <div class="logo">⚡GF<span style="color:var(--accent4);font-size:0.75em">3D</span></div>
+    <div class="top-actions">
+      <button class="btn btn-muted" onclick="newProject()">+ Nový</button>
+      <button class="btn btn-yellow" onclick="switchTab('money')">💵</button>
+      <button class="btn btn-yellow" onclick="switchTab('save')">💾</button>
+      <button class="btn btn-accent" onclick="switchTab('game');runGame()">▶ Spustit</button>
+    </div>
+  </div>
+
+  <div id="tabs">
+    <div class="tab active" onclick="switchTab('scene')">🗺 SCÉNA</div>
+    <div class="tab" onclick="switchTab('objects')">📦 OBJEKTY</div>
+    <div class="tab" onclick="switchTab('paint')">🎨 MALOVÁNÍ</div>
+    <div class="tab" onclick="switchTab('chars')">🧑 POSTAVY</div>
+    <div class="tab" onclick="switchTab('code')">💻 KÓD</div>
+    <div class="tab" onclick="switchTab('money')">💵 PENÍZE</div>
+    <div class="tab" onclick="switchTab('updates')">🔔 AKTUALIZACE</div>
+    <div class="tab" onclick="switchTab('settings')">⚙️ NASTAVENÍ</div>
+    <div class="tab" onclick="switchTab('save')">💾 ULOŽIT</div>
+    <div class="tab" onclick="switchTab('ai')">🤖 AI CHAT</div>
+    <div class="tab" onclick="switchTab('game')">🎮 HRA</div>
+  </div>
+
+  <div id="panels">
+
+    <!-- SCENE -->
+    <div class="panel active" id="panel-scene">
+      <div id="mode-bar">
+        <button class="mode-btn active" id="btn-2d" onclick="setEditorMode('2d')">2D EDITOR</button>
+        <button class="mode-btn" id="btn-3d" onclick="setEditorMode('3d')">3D EDITOR</button>
+        <button class="mode-btn" id="btn-iso" onclick="setEditorMode('iso')">ISO EDITOR</button>
+      </div>
+      <div id="scene-wrap">
+        <canvas id="scene-canvas-2d"></canvas>
+        <div id="scene-canvas-3d"></div>
+        <div id="scene-toolbar">
+          <div class="tool-btn active" id="tool-select" onclick="setTool('select')">👆</div>
+          <div class="tool-btn" id="tool-move" onclick="setTool('move')">✋</div>
+          <div class="tool-btn" id="tool-delete" onclick="setTool('delete')">🗑</div>
+        </div>
+      </div>
+      <div id="props-panel">
+        <h3>VLASTNOSTI</h3>
+        <div id="props-content"><p style="color:var(--muted);font-size:0.76em">Vyber objekt</p></div>
+      </div>
+    </div>
+
+    <!-- OBJECTS -->
+    <div class="panel" id="panel-objects">
+      <div id="objects-list">
+        <div class="empty-state" id="obj-empty">Žádné objekty.<br>Přidej je níže.</div>
+        <div id="obj-items"></div>
+      </div>
+      <div id="add-panel">
+        <h3>PŘIDAT OBJEKT</h3>
+        <div class="cat-label">🧑 POSTAVY</div>
+        <div class="add-grid">
+          <div class="add-tile" onclick="addObject('player')">🧑<span>HRÁČ</span></div>
+          <div class="add-tile" onclick="addObject('npc')">🧔<span>NPC</span></div>
+          <div class="add-tile" onclick="addObject('enemy')">👾<span>NEPŘÍTEL</span></div>
+          <div class="add-tile" onclick="addObject('zombie')">🧟<span>ZOMBIE</span></div>
+          <div class="add-tile" onclick="addObject('animal')">🐾<span>ZVÍŘE</span></div>
+        </div>
+        <div class="cat-label">🚗 AUTA</div>
+        <div class="add-grid">
+          <div class="add-tile" onclick="addObject('car')">🚗<span>AUTO</span></div>
+          <div class="add-tile" onclick="addObject('truck')">🚚<span>TRUCK</span></div>
+          <div class="add-tile" onclick="addObject('racecar')">🏎️<span>ZÁVOĎÁK</span></div>
+          <div class="add-tile" onclick="addObject('bus')">🚌<span>BUS</span></div>
+          <div class="add-tile" onclick="addObject('motorbike')">🏍️<span>MOTORKA</span></div>
+        </div>
+        <div class="cat-label">🏗️ BLOKY</div>
+        <div class="add-grid">
+          <div class="add-tile" onclick="addObject('platform')">🟫<span>PLOŠINA</span></div>
+          <div class="add-tile" onclick="addObject('wall')">🧱<span>ZEĎ</span></div>
+          <div class="add-tile" onclick="addObject('door')">🚪<span>DVEŘE</span></div>
+          <div class="add-tile" onclick="addObject('spike')">⚡<span>PAST</span></div>
+          <div class="add-tile" onclick="addObject('box')">📦<span>BEDNA</span></div>
+        </div>
+        <div class="cat-label">🏪 SHOPY</div>
+        <div class="add-grid">
+          <div class="add-tile" onclick="addObject('shop_electronics')">💻<span>ELEKTRO</span></div>
+          <div class="add-tile" onclick="addObject('shop_food')">🥦<span>JÍDLO</span></div>
+          <div class="add-tile" onclick="addObject('shop_weapons')">⚔️<span>ZBRANĚ</span></div>
+          <div class="add-tile" onclick="addObject('shop_cars')">🚘<span>AUTOSALON</span></div>
+          <div class="add-tile" onclick="addObject('shop_clothes')">👕<span>OBLEČENÍ</span></div>
+        </div>
+        <div class="cat-label">💰 SBĚR</div>
+        <div class="add-grid">
+          <div class="add-tile" onclick="addObject('money')">💵<span>PENÍZE</span></div>
+          <div class="add-tile" onclick="addObject('coin')">🪙<span>MINCE</span></div>
+          <div class="add-tile" onclick="addObject('gem')">💎<span>GEM</span></div>
+          <div class="add-tile" onclick="addObject('checkpoint')">🚩<span>CHECK</span></div>
+          <div class="add-tile" onclick="addObject('teleport')">🌀<span>TELEPORT</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CODE -->
+    <div class="panel" id="panel-code">
+      <div id="code-wrap">
+        <div id="code-header">
+          <select id="script-select" onchange="loadScript()"></select>
+          <input id="script-name-input" type="text" placeholder="nový_script"/>
+          <button class="btn btn-purple" onclick="createScript()">+</button>
+          <button class="btn btn-accent" onclick="saveScript()">💾</button>
+          <button class="btn btn-muted" onclick="runScript()">▶</button>
+        </div>
+        <textarea id="code-editor" spellcheck="false"></textarea>
+        <div id="code-footer">
+          <div id="code-output">// Připraveno</div>
+          <button class="btn btn-pink" style="font-size:0.65em;padding:4px 7px" onclick="deleteScript()">🗑</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MONEY EDITOR -->
+    <div class="panel" id="panel-money">
+      <div id="money-panel-content">
+
+        <div class="money-section">
+          <h3>💵 GLOBÁLNÍ NASTAVENÍ PENĚZ</h3>
+          <div class="money-row">
+            <label>Start peníze</label>
+            <input type="number" id="money-start" value="0" min="0" max="999999" onchange="updateMoneySettings()"/>
+          </div>
+          <div class="money-row">
+            <label>Max peníze</label>
+            <input type="number" id="money-max" value="999999" min="0" max="9999999" onchange="updateMoneySettings()"/>
+          </div>
+          <div class="money-row">
+            <label>Mince = Kč</label>
+            <input type="number" id="coin-value-global" value="10" min="1" max="10000" onchange="updateMoneySettings()"/>
+          </div>
+          <div class="money-row">
+            <label>Gem = Kč</label>
+            <input type="number" id="gem-value-global" value="25" min="1" max="10000" onchange="updateMoneySettings()"/>
+          </div>
+          <div class="money-row">
+            <label>Obtížnost</label>
+            <input type="range" min="0.1" max="3" step="0.1" value="1" id="money-difficulty" oninput="document.getElementById('diff-val').textContent=this.value+'x';updateMoneySettings()"/>
+            <span id="diff-val">1x</span>
+          </div>
+        </div>
+
+        <div class="money-section">
+          <h3>⚡ RYCHLÉ PŘEDVOLBY</h3>
+          <div class="money-presets">
+            <button class="preset-btn" onclick="applyMoneyPreset('broke')">😢 Chudák</button>
+            <button class="preset-btn" onclick="applyMoneyPreset('normal')">😊 Normální</button>
+            <button class="preset-btn" onclick="applyMoneyPreset('rich')">💰 Boháč</button>
+            <button class="preset-btn" onclick="applyMoneyPreset('millionaire')">🤑 Milionář</button>
+            <button class="preset-btn" onclick="applyMoneyPreset('custom')">✏️ Vlastní</button>
+          </div>
+          <div class="money-row" id="custom-money-row" style="display:none">
+            <label>Vlastní Kč</label>
+            <input type="number" id="custom-money-val" value="500" min="0"/>
+            <button class="money-apply-btn" onclick="setCustomMoney()">✓ Nastavit</button>
+          </div>
+        </div>
+
+        <div class="money-section">
+          <h3>📦 OBJEKTY S PENĚZI</h3>
+          <p style="font-size:0.72em;color:var(--muted);margin-bottom:8px;">Uprav částku každého objektu zvlášť:</p>
+          <div class="money-obj-list" id="money-obj-list">
+            <p style="font-size:0.75em;color:var(--muted);text-align:center;padding:12px;">Přidej objekty 💵 Peníze ve scéně.</p>
+          </div>
+        </div>
+
+        <div class="money-section">
+          <h3>🏪 CENY V SHOPECH</h3>
+          <div id="shop-price-list">
+            <div class="money-row"><label>Jablko 🍎</label><input type="number" id="sp-apple" value="5" min="0" onchange="updateShopPrice('apple',this.value)"/></div>
+            <div class="money-row"><label>Pizza 🍕</label><input type="number" id="sp-pizza" value="25" min="0" onchange="updateShopPrice('pizza',this.value)"/></div>
+            <div class="money-row"><label>Pistole 🔫</label><input type="number" id="sp-gun" value="400" min="0" onchange="updateShopPrice('gun',this.value)"/></div>
+            <div class="money-row"><label>Meč ⚔️</label><input type="number" id="sp-sword" value="200" min="0" onchange="updateShopPrice('sword',this.value)"/></div>
+            <div class="money-row"><label>Sporťák 🏎️</label><input type="number" id="sp-sport" value="2000" min="0" onchange="updateShopPrice('sport',this.value)"/></div>
+            <div class="money-row"><label>Notebook 💻</label><input type="number" id="sp-laptop" value="300" min="0" onchange="updateShopPrice('laptop',this.value)"/></div>
+            <div class="money-row"><label>Brnění 🥋</label><input type="number" id="sp-armor" value="350" min="0" onchange="updateShopPrice('armor',this.value)"/></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SAVE -->
+    <div class="panel" id="panel-save">
+      <div id="save-panel-content">
+        <div id="status-msg" class="status-msg"></div>
+        <div class="save-section">
+          <h3>📁 PROJEKT</h3>
+          <div class="save-row"><label>Název</label><input id="proj-name" type="text" value="Moje Hra"/></div>
+          <div class="save-btn-row">
+            <button class="save-big-btn sbb-green" onclick="saveProject()"><span class="icon">💾</span>ULOŽIT</button>
+            <button class="save-big-btn sbb-blue" onclick="exportHTML()"><span class="icon">🌐</span>HTML</button>
+            <button class="save-big-btn sbb-orange" onclick="exportJSON()"><span class="icon">📄</span>JSON</button>
+            <button class="save-big-btn sbb-purple" onclick="exportUnity()"><span class="icon">🎮</span>UNITY</button>
+          </div>
+        </div>
+        <div class="save-section">
+          <h3>📂 ULOŽENÉ PROJEKTY</h3>
+          <div class="no-projects" id="no-proj">Žádné uložené projekty.</div>
+          <div id="project-list" class="project-list"></div>
+        </div>
+        <div class="save-section">
+          <h3>ℹ️ STATISTIKY</h3>
+          <div id="stats-panel" style="font-size:0.75em;color:var(--muted);line-height:2;">Objekty: 0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAME -->
+    <div class="panel" id="panel-game">
+      <div id="game-wrap">
+        <canvas id="game-canvas-2d"></canvas>
+        <div id="game-canvas-3d"></div>
+        <div id="mode-indicator">2D MODE</div>
+        <div id="game-hud">
+          <div class="hud-chip" id="hud-score">⭐ 0</div>
+          <div class="hud-chip money" id="hud-money">💵 0</div>
+          <div class="hud-chip" id="hud-lives">❤️❤️❤️</div>
+          <div class="hud-chip time-chip" id="hud-time">⏱ 0s</div>
+        </div>
+        <div id="game-overlay">
+          <h2>🎮 GameForge 3D</h2>
+          <p>Přidej objekty, zvol herní režim a spusť!<br>
+          💵 Sbírej peníze → 🏪 Nakupuj v shopech<br>
+          E = vstoupit do shopu</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+            <button class="btn btn-accent" onclick="gameMode='2d';switchTab('game');runGame()">▶ Spustit 2D</button>
+            <button class="btn btn-purple" onclick="gameMode='3d';switchTab('game');runGame()">▶ Spustit 3D</button>
+          </div>
+          <button class="btn btn-muted" onclick="switchTab('objects')" style="margin-top:4px;">📦 Přidat objekty</button>
+        </div>
+        <div id="shop-overlay">
+          <div id="shop-header">
+            <h2 id="shop-title">🏪 Shop</h2>
+            <div id="shop-balance">💵 0</div>
+          </div>
+          <div id="shop-msg"></div>
+          <div id="shop-items"></div>
+          <div style="padding:8px;border-top:1px solid var(--border);">
+            <button id="shop-close" onclick="closeShop()">✕ Zavřít</button>
+          </div>
+        </div>
+        <div id="dpad" style="display:none;">
+          <div></div><div class="dpad-btn" onpointerdown="kd('up')" onpointerup="ku('up')">▲</div><div></div>
+          <div class="dpad-btn" onpointerdown="kd('left')" onpointerup="ku('left')">◀</div>
+          <div class="dpad-btn" onpointerdown="kd('down')" onpointerup="ku('down')">▼</div>
+          <div class="dpad-btn" onpointerdown="kd('right')" onpointerup="ku('right')">▶</div>
+          <div></div><div></div><div></div>
+        </div>
+        <div id="action-btns">
+          <div class="action-btn b" onpointerdown="kd('b')" onpointerup="ku('b')">B</div>
+          <div class="action-btn a" onpointerdown="kd('a')" onpointerup="ku('a')">A</div>
+          <div class="action-btn e" onpointerdown="kd('e')" onpointerup="ku('e')">E</div>
+        </div>
+        <div id="gas-btn" onpointerdown="kd('gas')" onpointerup="ku('gas')">⛽</div>
+        <div id="cam-btns">
+          <div class="cam-btn active" onclick="setCamView('follow')">📷 FOLLOW</div>
+          <div class="cam-btn" onclick="setCamView('top')">🔭 VRŠEK</div>
+          <div class="cam-btn" onclick="setCamView('side')">↔️ BOK</div>
+          <div class="cam-btn" onclick="setCamView('free')">🌐 FREE</div>
+        </div>
+
+        <!-- PC BUILDER OVERLAY -->
+        <div id="pc-builder">
+          <div id="pc-builder-header">
+            <h2>🖥️ PC BUILDER</h2>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span id="pcb-budget-header" style="font-family:'Orbitron',sans-serif;font-size:0.72em;color:var(--accent3);">💵 0 Kč</span>
+              <button class="pc-close-btn" onclick="closePCBuilder()">✕</button>
+            </div>
+          </div>
+          <div id="pc-builder-body">
+
+            <div class="pc-stats-panel">
+              <h4>📊 VÝKON SESTAVY</h4>
+              <div class="pc-stat-row"><span class="pc-stat-label">Výkon CPU</span><div class="pc-stat-bar-bg"><div class="pc-stat-bar" id="stat-cpu" style="width:0%;background:#00f5d4"></div></div><span class="pc-stat-val" id="stat-cpu-val">0%</span></div>
+              <div class="pc-stat-row"><span class="pc-stat-label">Výkon GPU</span><div class="pc-stat-bar-bg"><div class="pc-stat-bar" id="stat-gpu" style="width:0%;background:#7b2fff"></div></div><span class="pc-stat-val" id="stat-gpu-val">0%</span></div>
+              <div class="pc-stat-row"><span class="pc-stat-label">RAM</span><div class="pc-stat-bar-bg"><div class="pc-stat-bar" id="stat-ram" style="width:0%;background:#ffd60a"></div></div><span class="pc-stat-val" id="stat-ram-val">0%</span></div>
+              <div class="pc-stat-row"><span class="pc-stat-label">Úložiště</span><div class="pc-stat-bar-bg"><div class="pc-stat-bar" id="stat-ssd" style="width:0%;background:#f72585"></div></div><span class="pc-stat-val" id="stat-ssd-val">0%</span></div>
+              <div class="pc-stat-row"><span class="pc-stat-label">Chlazení</span><div class="pc-stat-bar-bg"><div class="pc-stat-bar" id="stat-cool" style="width:0%;background:#00e676"></div></div><span class="pc-stat-val" id="stat-cool-val">0%</span></div>
+            </div>
+
+            <!-- CPU -->
+            <div class="pc-section">
+              <div class="pc-section-header" onclick="togglePCSection('cpu')">
+                <h4>🧠 PROCESOR (CPU)</h4>
+                <span class="pc-section-selected" id="sel-cpu">— Nevybráno —</span>
+              </div>
+              <div class="pc-items" id="pc-cpu-items"></div>
+            </div>
+
+            <!-- GPU -->
+            <div class="pc-section">
+              <div class="pc-section-header" onclick="togglePCSection('gpu')">
+                <h4>🎮 GRAFICKÁ KARTA (GPU)</h4>
+                <span class="pc-section-selected" id="sel-gpu">— Nevybráno —</span>
+              </div>
+              <div class="pc-items" id="pc-gpu-items"></div>
+            </div>
+
+            <!-- RAM -->
+            <div class="pc-section">
+              <div class="pc-section-header" onclick="togglePCSection('ram')">
+                <h4>💾 OPERAČNÍ PAMĚŤ (RAM)</h4>
+                <span class="pc-section-selected" id="sel-ram">— Nevybráno —</span>
+              </div>
+              <div class="pc-items" id="pc-ram-items"></div>
+            </div>
+
+            <!-- SSD -->
+            <div class="pc-section">
+              <div class="pc-section-header" onclick="togglePCSection('ssd')">
+                <h4>💿 ÚLOŽIŠTĚ (SSD/HDD)</h4>
+                <span class="pc-section-selected" id="sel-ssd">— Nevybráno —</span>
+              </div>
+              <div class="pc-items" id="pc-ssd-items"></div>
+            </div>
+
+            <!-- COOLING -->
+            <div class="pc-section">
+              <div class="pc-section-header" onclick="togglePCSection('cool')">
+                <h4>❄️ CHLAZENÍ</h4>
+                <span class="pc-section-selected" id="sel-cool">— Nevybráno —</span>
+              </div>
+              <div class="pc-items" id="pc-cool-items"></div>
+            </div>
+
+            <!-- CASE -->
+            <div class="pc-section">
+              <div class="pc-section-header" onclick="togglePCSection('case')">
+                <h4>🖥️ SKŘÍŇ</h4>
+                <span class="pc-section-selected" id="sel-case">— Nevybráno —</span>
+              </div>
+              <div class="pc-items" id="pc-case-items"></div>
+            </div>
+
+          </div>
+          <div id="pc-builder-footer">
+            <div>
+              <div class="pc-budget">💵 Zbývá: <span id="pcb-remaining">0</span> Kč</div>
+              <div class="pc-total">Celkem: <span id="pcb-total">0</span> Kč</div>
+            </div>
+            <button class="pc-build-btn" id="pc-build-btn" onclick="buildPC()" disabled>🔧 SESTAVIT PC</button>
+          </div>
+          <div class="pc-built-badge" id="pc-built-badge">
+            <h3>🎉 PC SESTAVEN!</h3>
+            <p id="pc-built-desc">Tvůj herní stroj je hotový!</p>
+            <button class="pc-build-btn" style="margin-top:8px;width:100%" onclick="closePCBuilderAfterBuild()">✓ Super!</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="panel" id="panel-settings">
+      <div id="settings-content">
+
+        <div class="settings-section">
+          <h3>🎮 HERNÍ REŽIM</h3>
+          <div class="setting-row">
+            <div style="flex:1">
+              <label>Výchozí herní režim</label>
+              <span class="setting-desc">Přepíná mezi 2D a 3D při spuštění hry</span>
+            </div>
+            <div class="toggle-wrap">
+              <div class="toggle-opt active" id="set-game-2d" onclick="setGameModeSetting('2d')">2D</div>
+              <div class="toggle-opt" id="set-game-3d" onclick="setGameModeSetting('3d')">3D</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div style="flex:1">
+              <label>Výchozí editor scény</label>
+              <span class="setting-desc">2D / 3D / Izometrický pohled</span>
+            </div>
+            <div class="toggle-wrap">
+              <div class="toggle-opt active" id="set-ed-2d" onclick="setEditorSetting('2d')">2D</div>
+              <div class="toggle-opt" id="set-ed-3d" onclick="setEditorSetting('3d')">3D</div>
+              <div class="toggle-opt" id="set-ed-iso" onclick="setEditorSetting('iso')">ISO</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>📷 3D KAMERA</h3>
+          <div class="setting-row">
+            <div style="flex:1">
+              <label>Výchozí pohled kamery</label>
+              <span class="setting-desc">Jak kamera sleduje hráče ve 3D</span>
+            </div>
+            <select id="set-cam-view" onchange="settings.camView=this.value">
+              <option value="follow">📷 Follow (za hráčem)</option>
+              <option value="top">🔭 Pohled shora</option>
+              <option value="side">↔️ Boční pohled</option>
+              <option value="free">🌐 Volná orbit kamera</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>Vzdálenost kamery</label>
+            <input type="range" min="4" max="20" step="1" value="9" id="set-cam-dist"
+              oninput="settings.camDist=+this.value;document.getElementById('cam-dist-val').textContent=this.value"/>
+            <span id="cam-dist-val" style="font-size:0.68em;color:var(--accent4);min-width:20px">9</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>🌍 FYZIKA & HRA</h3>
+          <div class="setting-row">
+            <label>Gravitace</label>
+            <input type="range" min="0.1" max="1.5" step="0.05" value="0.45" id="set-gravity"
+              oninput="settings.gravity=+this.value;document.getElementById('grav-val').textContent=this.value"/>
+            <span id="grav-val" style="font-size:0.68em;color:var(--accent4);min-width:30px">0.45</span>
+          </div>
+          <div class="setting-row">
+            <div style="flex:1">
+              <label>Životy hráče</label>
+              <span class="setting-desc">Počet životů na začátku hry</span>
+            </div>
+            <div class="toggle-wrap">
+              <div class="toggle-opt" onclick="settings.startLives=1;highlightLives(1)">1</div>
+              <div class="toggle-opt" onclick="settings.startLives=3;highlightLives(3)">3</div>
+              <div class="toggle-opt active" id="lives-3" onclick="settings.startLives=3;highlightLives(3)">3</div>
+              <div class="toggle-opt" onclick="settings.startLives=5;highlightLives(5)">5</div>
+              <div class="toggle-opt" onclick="settings.startLives=10;highlightLives(10)">∞</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div style="flex:1">
+              <label>Kolize vozidel</label>
+              <span class="setting-desc">Auta mohou srazit nepřátele</span>
+            </div>
+            <div class="toggle-wrap">
+              <div class="toggle-opt active-green active" id="set-car-col-on" onclick="settings.carCollision=true;setToggle('car-col','on')">ZAP</div>
+              <div class="toggle-opt" id="set-car-col-off" onclick="settings.carCollision=false;setToggle('car-col','off')">VYP</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>🎨 GRAFIKA</h3>
+          <div class="setting-row">
+            <div style="flex:1">
+              <label>Stíny (3D)</label>
+              <span class="setting-desc">Realistické stíny (může zpomalit na mobilu)</span>
+            </div>
+            <div class="toggle-wrap">
+              <div class="toggle-opt active-green active" id="set-shadow-on" onclick="settings.shadows=true;setToggle('shadow','on')">ZAP</div>
+              <div class="toggle-opt" id="set-shadow-off" onclick="settings.shadows=false;setToggle('shadow','off')">VYP</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div style="flex:1">
+              <label>Mlha (3D)</label>
+              <span class="setting-desc">Atmosférická mlha ve 3D scéně</span>
+            </div>
+            <div class="toggle-wrap">
+              <div class="toggle-opt active-green active" id="set-fog-on" onclick="settings.fog=true;setToggle('fog','on')">ZAP</div>
+              <div class="toggle-opt" id="set-fog-off" onclick="settings.fog=false;setToggle('fog','off')">VYP</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>Kvalita renderu</label>
+            <select id="set-quality" onchange="settings.quality=this.value">
+              <option value="low">Nízká (rychlé na mobilu)</option>
+              <option value="medium" selected>Střední</option>
+              <option value="high">Vysoká</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>🔊 ZVUK</h3>
+          <div class="setting-row">
+            <div style="flex:1">
+              <label>Herní zvuky</label>
+            </div>
+            <div class="toggle-wrap">
+              <div class="toggle-opt active-green active" id="set-sfx-on" onclick="settings.sfx=true;setToggle('sfx','on')">ZAP</div>
+              <div class="toggle-opt" id="set-sfx-off" onclick="settings.sfx=false;setToggle('sfx','off')">VYP</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>Hlasitost</label>
+            <input type="range" min="0" max="1" step="0.1" value="0.5" id="set-vol"
+              oninput="settings.volume=+this.value"/>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>🖥️ PC BUILDER</h3>
+          <div class="setting-row">
+            <div style="flex:1">
+              <label>PC Builder v obchodě</label>
+              <span class="setting-desc">Koupí počítače otevře PC Builder</span>
+            </div>
+            <div class="toggle-wrap">
+              <div class="toggle-opt active-green active" id="set-pcb-on" onclick="settings.pcBuilder=true;setToggle('pcb','on')">ZAP</div>
+              <div class="toggle-opt" id="set-pcb-off" onclick="settings.pcBuilder=false;setToggle('pcb','off')">VYP</div>
+            </div>
+          </div>
+          <div style="background:#0d0d1e;border:1px solid var(--border);border-radius:9px;padding:10px;margin-top:6px;">
+            <p style="font-size:0.72em;color:var(--muted);line-height:1.7;">💡 Ve hře: Kup <b style="color:var(--accent)">Počítač</b> nebo <b style="color:var(--accent)">Notebook</b> v 💻 Elektronice → otevře se <b style="color:var(--accent4)">PC Builder</b> kde sestavíš svůj PC z komponent!</p>
+          </div>
+        </div>
+
+        <button class="settings-apply-btn" onclick="applySettings()">⚙️ POUŽÍT NASTAVENÍ</button>
+      </div>
+    </div>
+
+  </div><!-- /panels -->
+</div><!-- /app -->
+
+<!-- PC BUILDER OVERLAY (inside game-wrap, added by JS) -->
+
+
+<script>
+// ═══════════════════════════════════════
+// GLOBAL STATE
+// ═══════════════════════════════════════
+let currentTab='scene', currentTool='select', editorMode='2d', gameMode='2d';
+let selectedObj=null, objects=[], nextId=1;
+let keys={}, score=0, lives=3, elapsed=0, playerMoney=0;
+let gameRunning=false, animFrame=null, gameObjs=[];
+let savedScripts={}, camX=0, camY=0;
+let particles=[], shopOpen=false;
+let camView='follow';
+
+// Money settings
+let moneySettings={
+  startMoney: 0,
+  maxMoney: 999999,
+  coinValue: 10,
+  gemValue: 25,
+  difficulty: 1
+};
+let shopPrices={
+  apple:5, pizza:25, burger:18, energy:10, sushi:35, coffee:8,
+  sword:200, gun:400, bow:150, shield:180, bomb:300,
+  sport:2000, jeep:1200, van:800, bike:600, truck2:3000,
+  pc:500, laptop:300, phone:150, tablet:250, gpu:800, vr:1200,
+  armor:350, boots:120, hat:80, jacket:200
+};
+
+// ─── THREE.JS state ───
+let threeRenderer=null, threeScene=null, threeCamera=null;
+let threeMeshes=new Map();
+let threeAnimFrame=null;
+let cameraAngle=0, cameraDistance=8, cameraPitch=0.5;
+let touchStartX=0, touchStartY=0, isTouchRotating=false;
+
+// ═══════════════════════════════════════
+// OBJECT DEFINITIONS
+// ═══════════════════════════════════════
+const COLORS={
+  player:'#00f5d4',npc:'#7b2fff',enemy:'#f72585',zombie:'#7dff6b',animal:'#ffa040',
+  car:'#00b0ff',truck:'#ff6d00',racecar:'#ff2255',bus:'#ffe000',motorbike:'#00e5ff',
+  platform:'#8B6914',wall:'#404060',door:'#7b2fff',spike:'#f72585',box:'#a07040',
+  shop_electronics:'#00b0ff',shop_food:'#00e676',shop_weapons:'#f72585',
+  shop_cars:'#ffd60a',shop_clothes:'#e040fb',
+  money:'#ffd60a',coin:'#ffd60a',gem:'#e040fb',
+  checkpoint:'#00e676',teleport:'#7b2fff',light:'#fff9c4'
+};
+const OBJ_DEF={
+  player:  {w:28,h:60,speed:3,jump:9,health:100},
+  npc:     {w:26,h:58,speed:1,health:50,dialog:'Ahoj!'},
+  enemy:   {w:30,h:30,speed:1.5,health:30,damage:10},
+  zombie:  {w:28,h:52,speed:0.8,health:50,damage:20},
+  animal:  {w:34,h:26,speed:2,health:20},
+  car:     {w:70,h:36,speed:4,isVehicle:true,maxSpeed:8},
+  truck:   {w:100,h:44,speed:2.5,isVehicle:true,maxSpeed:5},
+  racecar: {w:68,h:28,speed:7,isVehicle:true,maxSpeed:14},
+  bus:     {w:110,h:46,speed:2,isVehicle:true,maxSpeed:4},
+  motorbike:{w:44,h:30,speed:5,isVehicle:true,maxSpeed:10},
+  platform:{w:120,h:22},
+  wall:    {w:22,h:90},
+  door:    {w:30,h:54},
+  spike:   {w:22,h:22,damage:30},
+  box:     {w:32,h:32,health:50},
+  shop_electronics:{w:80,h:70,shopType:'electronics',shopName:'💻 Elektronika'},
+  shop_food:       {w:80,h:70,shopType:'food',shopName:'🥦 Potraviny'},
+  shop_weapons:    {w:80,h:70,shopType:'weapons',shopName:'⚔️ Zbraně'},
+  shop_cars:       {w:90,h:70,shopType:'cars',shopName:'🚘 Autosalon'},
+  shop_clothes:    {w:80,h:70,shopType:'clothes',shopName:'👕 Oblečení'},
+  money:   {w:22,h:22,value:100,amount:100},
+  coin:    {w:18,h:18,value:10},
+  gem:     {w:20,h:20,value:25},
+  checkpoint:{w:38,h:58},
+  teleport:{w:36,h:36},
+  light:   {w:16,h:16,radius:80}
+};
+
+const SHOP_CATALOGS={
+  electronics:[
+    {id:'pc',icon:'🖥️',name:'Počítač',price:500,desc:'Stav si vlastní PC'},
+    {id:'laptop',icon:'💻',name:'Notebook',price:300,desc:'Přenosný počítač'},
+    {id:'phone',icon:'📱',name:'Telefon',price:150,desc:'Chytrý telefon'},
+    {id:'gpu',icon:'🎮',name:'GPU',price:800,desc:'Ultra výkon'},
+    {id:'vr',icon:'🥽',name:'VR Headset',price:1200,desc:'Virtuální realita'},
+  ],
+  food:[
+    {id:'apple',icon:'🍎',name:'Jablko',price:5,desc:'+10 HP',heal:10},
+    {id:'pizza',icon:'🍕',name:'Pizza',price:25,desc:'+40 HP',heal:40},
+    {id:'burger',icon:'🍔',name:'Burger',price:18,desc:'+25 HP',heal:25},
+    {id:'energy',icon:'⚡',name:'Energeťák',price:10,desc:'+speed',heal:15},
+    {id:'sushi',icon:'🍱',name:'Sushi',price:35,desc:'+50 HP',heal:50},
+  ],
+  weapons:[
+    {id:'sword',icon:'⚔️',name:'Meč',price:200,desc:'Blízký útok'},
+    {id:'gun',icon:'🔫',name:'Pistole',price:400,desc:'Střelná zbraň'},
+    {id:'bow',icon:'🏹',name:'Luk',price:150,desc:'Tichý útok'},
+    {id:'shield',icon:'🛡️',name:'Štít',price:180,desc:'+50 HP armor'},
+    {id:'bomb',icon:'💣',name:'Bomba',price:300,desc:'Výbuch AOE'},
+  ],
+  cars:[
+    {id:'sport',icon:'🏎️',name:'Sporťák',price:2000,desc:'Rychlost 14'},
+    {id:'jeep',icon:'🚙',name:'Jeep',price:1200,desc:'Terénní vůz'},
+    {id:'van',icon:'🚐',name:'Dodávka',price:800,desc:'Velká kapacita'},
+    {id:'bike',icon:'🏍️',name:'Motorka',price:600,desc:'Rychlá a hbitá'},
+    {id:'truck2',icon:'🚛',name:'Tahač',price:3000,desc:'Nejsilnější'},
+  ],
+  clothes:[
+    {id:'armor',icon:'🥋',name:'Brnění',price:350,desc:'+100 HP armor'},
+    {id:'boots',icon:'👟',name:'Boty',price:120,desc:'+1 rychlost'},
+    {id:'hat',icon:'🎩',name:'Klobouk',price:80,desc:'Styl +10'},
+    {id:'jacket',icon:'🧥',name:'Bunda',price:200,desc:'Odolnost'},
+  ]
+};
+
+// ═══════════════════════════════════════
+// DEFAULT SCRIPTS (2D + 3D + MONEY)
+// ═══════════════════════════════════════
+const DEFAULT_SCRIPTS={
+'game.js':`// ════════════════════════════════
+// GAME.JS – Hlavní herní logika
+// Funguje pro 2D i 3D režim!
+// ════════════════════════════════
+
+function onStart(){
+  score = 0;
+  lives = 3;
+  playerMoney = moneySettings.startMoney; // Start peníze z Money Editoru
+}
+
+function onUpdate(dt){
+  // dt = čas od posledního snímku (sekundy)
+  // Volá se každý frame – přidej sem herní logiku
+}
+
+function onCollision(a, b){
+  if(a.type === 'player' && b.type === 'coin'){
+    score += moneySettings.coinValue;
+    playerMoney += moneySettings.coinValue;
+    b.active = false;
+  }
+  if(a.type === 'player' && b.type === 'gem'){
+    score += moneySettings.gemValue;
+    playerMoney += moneySettings.gemValue;
+    b.active = false;
+  }
+  if(a.type === 'player' && b.type === 'money'){
+    playerMoney = Math.min(playerMoney + b.amount, moneySettings.maxMoney);
+    b.active = false;
+  }
+  if(a.type === 'player' && b.type === 'enemy')   lives -= 1;
+  if(a.type === 'player' && b.type === 'zombie')  lives -= 2;
+  if(a.type === 'player' && b.type === 'spike')   lives -= 1;
+}`,
+
+'player_2d.js':`// ════════════════════════════════
+// PLAYER_2D.JS – Pohyb hráče ve 2D
+// ════════════════════════════════
+
+function playerUpdate2D(p, dt){
+  // Horizontální pohyb
+  if(keys.left)       p.vx = -p.speed;
+  else if(keys.right) p.vx =  p.speed;
+  else                p.vx *= 0.75;   // Tření
+
+  // Skok (A tlačítko nebo šipka nahoru)
+  if((keys.up || keys.a) && p.onGround){
+    p.vy = -(p.jump || 9);
+    p.onGround = false;
+  }
+
+  // Gravitace
+  p.vy += 0.45;
+  p.x  += p.vx;
+  p.y  += p.vy;
+}`,
+
+'player_3d.js':`// ════════════════════════════════
+// PLAYER_3D.JS – Pohyb hráče v 3D
+// Three.js scéna – pozice jsou v 3D prostoru
+// ════════════════════════════════
+
+function playerUpdate3D(p, dt, camera){
+  const speed = p.speed || 3;
+
+  // Pohyb relativní ke kameře
+  if(keys.left)  p.mesh.position.x -= speed * dt;
+  if(keys.right) p.mesh.position.x += speed * dt;
+  if(keys.up || keys.down){}
+
+  // Dopředu/dozadu (W/S nebo joystick)
+  if(keys.forward) p.mesh.position.z -= speed * dt;
+  if(keys.back)    p.mesh.position.z += speed * dt;
+
+  // Skok v 3D
+  if(keys.a && p.onGround){
+    p.vy3d = 5;
+    p.onGround = false;
+  }
+
+  // Gravitace v 3D
+  p.vy3d = (p.vy3d || 0) - 9.8 * dt;
+  p.mesh.position.y += p.vy3d * dt;
+
+  if(p.mesh.position.y <= 0){
+    p.mesh.position.y = 0;
+    p.vy3d = 0;
+    p.onGround = true;
+  }
+}`,
+
+'car_2d.js':`// ════════════════════════════════
+// CAR_2D.JS – Fyzika auta ve 2D
+// ════════════════════════════════
+
+function carUpdate2D(car, dt){
+  // Plyn a brzda
+  if(keys.right || keys.gas) car.vx += 0.55;
+  if(keys.left)              car.vx -= 0.55;
+
+  // Tření a limit rychlosti
+  car.vx *= 0.91;
+  const maxSpd = car.maxSpeed || 8;
+  car.vx = Math.max(-maxSpd * 0.5, Math.min(maxSpd, car.vx));
+
+  // Skok / terén
+  if((keys.up || keys.a) && car.onGround){
+    car.vy = -7;
+    car.onGround = false;
+  }
+
+  // Gravitace
+  car.vy += 0.45;
+  car.x  += car.vx;
+  car.y  += car.vy;
+}`,
+
+'car_3d.js':`// ════════════════════════════════
+// CAR_3D.JS – Fyzika auta v 3D (Three.js)
+// ════════════════════════════════
+
+function carUpdate3D(car, dt){
+  const accel = 0.4;
+  const maxSpd = car.maxSpeed || 8;
+
+  // Plyn
+  if(keys.right || keys.gas) car.speed3d = Math.min((car.speed3d||0) + accel, maxSpd);
+  if(keys.left)               car.speed3d = Math.max((car.speed3d||0) - accel, -maxSpd*0.4);
+
+  // Tření
+  car.speed3d = (car.speed3d || 0) * 0.92;
+
+  // Pohyb auta ve směru rotace
+  car.mesh.position.x += Math.sin(car.mesh.rotation.y) * car.speed3d * dt * 60;
+  car.mesh.position.z += Math.cos(car.mesh.rotation.y) * car.speed3d * dt * 60;
+
+  // Zatáčení
+  if(keys.up)    car.mesh.rotation.y -= 0.03 * (car.speed3d / maxSpd);
+  if(keys.down)  car.mesh.rotation.y += 0.03 * (car.speed3d / maxSpd);
+
+  // Gravitace
+  if(car.mesh.position.y > 0){
+    car.vy3d = (car.vy3d || 0) - 9.8 * dt;
+    car.mesh.position.y += car.vy3d * dt;
+    if(car.mesh.position.y <= 0){ car.mesh.position.y=0; car.vy3d=0; }
+  }
+}`,
+
+'enemy_ai.js':`// ════════════════════════════════
+// ENEMY_AI.JS – AI nepřítele (2D i 3D)
+// ════════════════════════════════
+
+function enemyUpdate(e, dt, player){
+  // Základní pohyb tam a zpět
+  e.x += (e.speed || 1.5) * (e.dir || 1);
+  if(e.x < 0 || e.x + e.w > 800) e.dir = (e.dir || 1) * -1;
+
+  // Sledování hráče pokud je blízko
+  if(player && Math.abs(e.x - player.x) < 200){
+    const dir = player.x > e.x ? 1 : -1;
+    e.x += dir * (e.speed || 1.5) * 0.8;
+    // Skok přes překážky
+    if(player.y < e.y - 40 && e.onGround) e.vy = -7;
+  }
+
+  // Gravitace
+  e.vy = (e.vy || 0) + 0.45;
+  if(e.y + e.h > 600){ e.y = 600 - e.h; e.vy = 0; e.onGround = true; }
+  e.y += e.vy;
+}`,
+
+'money.js':`// ════════════════════════════════
+// MONEY.JS – Systém peněz
+// Uprav hodnoty v Money Editoru (záložka 💵)!
+// ════════════════════════════════
+
+// Přidat peníze hráči
+function addMoney(amount){
+  playerMoney = Math.min(playerMoney + amount, moneySettings.maxMoney);
+  updateHUD();
+}
+
+// Odebrat peníze (vrátí true pokud měl dost)
+function spendMoney(amount){
+  if(playerMoney >= amount){
+    playerMoney -= amount;
+    updateHUD();
+    return true;
+  }
+  return false; // Nedostatek peněz
+}
+
+// Nastavit peníze přímo
+function setMoney(amount){
+  playerMoney = Math.max(0, Math.min(amount, moneySettings.maxMoney));
+  updateHUD();
+}
+
+// Aktualizace HUD
+function updateHUD(){
+  document.getElementById('hud-money').textContent = '💵 ' + playerMoney;
+}
+
+// Volá se při sbírání objektů
+function onPickup(obj){
+  if(obj.type === 'money')  addMoney(obj.amount || 100);
+  if(obj.type === 'coin')   addMoney(moneySettings.coinValue);
+  if(obj.type === 'gem')    addMoney(moneySettings.gemValue);
+}
+
+// Koupit v shopu
+function buyFromShop(item, shopType){
+  const price = shopPrices[item.id] || item.price;
+  if(spendMoney(price)){
+    console.log('Koupeno:', item.name, 'za', price, 'Kč');
+    return true;
+  }
+  return false;
+}`,
+
+'3d_scene.js':`// ════════════════════════════════
+// 3D_SCENE.JS – Three.js scéna
+// Tento script řídí 3D prostředí
+// ════════════════════════════════
+
+// Nastavení osvětlení (volá se při spuštění 3D režimu)
+function setup3DLighting(scene){
+  // Ambientní světlo
+  const ambient = new THREE.AmbientLight(0x404080, 0.6);
+  scene.add(ambient);
+
+  // Směrové světlo (slunce)
+  const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
+  sun.position.set(10, 20, 10);
+  sun.castShadow = true;
+  scene.add(sun);
+
+  // Druhé světlo ze stínu
+  const fill = new THREE.DirectionalLight(0x8080ff, 0.3);
+  fill.position.set(-10, 5, -10);
+  scene.add(fill);
+}
+
+// Přidat 3D objekt do scény
+function add3DObject(scene, type, x, y, z, color){
+  let geometry, material, mesh;
+  const col = new THREE.Color(color || '#00f5d4');
+
+  if(type === 'player' || type === 'npc'){
+    // Postava z více kvádrů
+    const group = new THREE.Group();
+    // Tělo
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.8, 0.3),
+      new THREE.MeshLambertMaterial({color: col})
+    );
+    body.position.y = 0.9;
+    group.add(body);
+    // Hlava (koule)
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.25, 8, 8),
+      new THREE.MeshLambertMaterial({color: col})
+    );
+    head.position.y = 1.55;
+    group.add(head);
+    group.position.set(x, y, z);
+    scene.add(group);
+    return group;
+  }
+
+  if(type === 'car' || type === 'racecar'){
+    const group = new THREE.Group();
+    // Karosérie
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(1.8, 0.5, 0.9),
+      new THREE.MeshLambertMaterial({color: col})
+    );
+    body.position.y = 0.35;
+    group.add(body);
+    // Střecha
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(1.0, 0.4, 0.85),
+      new THREE.MeshLambertMaterial({color: col, opacity:0.9, transparent:true})
+    );
+    roof.position.set(-0.1, 0.75, 0);
+    group.add(roof);
+    // Kola (4x)
+    const wheelGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.15, 12);
+    const wheelMat = new THREE.MeshLambertMaterial({color: 0x111111});
+    [[-0.7,0,0.5],[0.7,0,0.5],[-0.7,0,-0.5],[0.7,0,-0.5]].forEach(([wx,wy,wz])=>{
+      const w = new THREE.Mesh(wheelGeo, wheelMat);
+      w.rotation.z = Math.PI/2;
+      w.position.set(wx, 0.2, wz);
+      group.add(w);
+    });
+    group.position.set(x, y, z);
+    scene.add(group);
+    return group;
+  }
+
+  // Výchozí kvádry
+  const sizes = {
+    platform:[2.5,0.3,1], wall:[0.3,1.8,1],
+    coin:[0.3,0.3,0.3], gem:[0.3,0.4,0.3],
+    money:[0.35,0.25,0.1]
+  };
+  const size = sizes[type] || [0.8,0.8,0.8];
+  geometry = new THREE.BoxGeometry(...size);
+  material = new THREE.MeshLambertMaterial({color: col, transparent: true, opacity: 0.85});
+  mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x, y + size[1]/2, z);
+  scene.add(mesh);
+  return mesh;
+}
+
+// Nastavení pozice kamery (follow player)
+function updateCamera3D(camera, playerMesh, view){
+  if(!playerMesh) return;
+  const px = playerMesh.position.x;
+  const py = playerMesh.position.y;
+  const pz = playerMesh.position.z;
+
+  if(view === 'follow'){
+    camera.position.set(px, py + 5, pz + 8);
+    camera.lookAt(px, py + 1, pz);
+  } else if(view === 'top'){
+    camera.position.set(px, py + 12, pz);
+    camera.lookAt(px, py, pz);
+  } else if(view === 'side'){
+    camera.position.set(px + 10, py + 3, pz);
+    camera.lookAt(px, py + 1, pz);
+  }
+}`,
+};
+
+// ═══════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════
+function switchTab(n){
+  currentTab=n;
+  const names=['scene','objects','paint','chars','code','money','updates','settings','save','ai','game'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===n));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+n));
+  if(n==='scene')setTimeout(()=>{drawScene2D();if(editorMode==='3d')initEditor3D();},50);
+  if(n==='code')initCodePanel();
+  if(n==='money')refreshMoneyPanel();
+  if(n==='settings')refreshSettingsPanel();
+  if(n==='save'){refreshProjectList();updateStats();}
+  if(n==='paint')setTimeout(initPaintCanvas,50);
+  if(n==='chars')setTimeout(initCharEditor,50);
+}
+
+// ═══════════════════════════════════════
+// EDITOR MODE
+// ═══════════════════════════════════════
+function setEditorMode(m){
+  editorMode=m;
+  ['2d','3d','iso'].forEach(mm=>{
+    const b=document.getElementById('btn-'+mm);
+    if(b)b.classList.toggle('active',mm===m);
+  });
+  const c2d=document.getElementById('scene-canvas-2d');
+  const c3d=document.getElementById('scene-canvas-3d');
+  if(m==='3d'){
+    c2d.style.display='none';c3d.style.display='block';
+    initEditor3D();
+  } else {
+    c2d.style.display='block';c3d.style.display='none';
+    stopEditor3D();
+    drawScene2D();
+  }
+}
+
+// ═══════════════════════════════════════
+// THREE.JS EDITOR
+// ═══════════════════════════════════════
+function initEditor3D(){
+  const wrap=document.getElementById('scene-canvas-3d');
+  if(threeRenderer){stopEditor3D();}
+  const W=wrap.clientWidth||320, H=wrap.clientHeight||300;
+  threeRenderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  threeRenderer.setSize(W,H);
+  threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  threeRenderer.shadowMap.enabled=true;
+  wrap.innerHTML='';wrap.appendChild(threeRenderer.domElement);
+
+  threeScene=new THREE.Scene();
+  threeScene.background=new THREE.Color(0x0a0a18);
+  threeScene.fog=new THREE.FogExp2(0x0a0a18,0.04);
+
+  threeCamera=new THREE.PerspectiveCamera(60,W/H,0.1,200);
+  threeCamera.position.set(0,8,14);
+  threeCamera.lookAt(0,0,0);
+
+  // Lights
+  threeScene.add(new THREE.AmbientLight(0x404080,0.7));
+  const sun=new THREE.DirectionalLight(0xffeedd,1.2);
+  sun.position.set(8,15,8);sun.castShadow=true;threeScene.add(sun);
+
+  // Ground grid
+  const grid=new THREE.GridHelper(40,20,0x1e1e32,0x1e1e32);
+  threeScene.add(grid);
+
+  // Ground plane
+  const groundGeo=new THREE.PlaneGeometry(40,40);
+  const groundMat=new THREE.MeshLambertMaterial({color:0x0d0d20});
+  const ground=new THREE.Mesh(groundGeo,groundMat);
+  ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;
+  threeScene.add(ground);
+
+  // Add existing objects
+  threeMeshes.clear();
+  objects.forEach(o=>add3DEditorObject(o));
+
+  // Touch rotation
+  wrap.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;isTouchRotating=true;},{passive:true});
+  wrap.addEventListener('touchmove',e=>{
+    if(!isTouchRotating)return;
+    const dx=e.touches[0].clientX-touchStartX;
+    const dy=e.touches[0].clientY-touchStartY;
+    cameraAngle+=dx*0.01;cameraPitch=Math.max(0.1,Math.min(1.4,cameraPitch+dy*0.01));
+    touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;
+  },{passive:true});
+  wrap.addEventListener('touchend',()=>isTouchRotating=false);
+
+  function editorLoop(){
+    threeAnimFrame=requestAnimationFrame(editorLoop);
+    const r=cameraDistance;
+    threeCamera.position.set(Math.sin(cameraAngle)*r,cameraPitch*r+2,Math.cos(cameraAngle)*r);
+    threeCamera.lookAt(0,1,0);
+    // Animate objects
+    threeMeshes.forEach((mesh,id)=>{
+      if(mesh.userData.type==='coin'||mesh.userData.type==='gem'){
+        mesh.rotation.y+=0.03;mesh.position.y=0.3+Math.sin(Date.now()*0.003+id)*0.08;
+      }
+      if(mesh.userData.type==='money'){mesh.rotation.y+=0.02;}
+    });
+    threeRenderer.render(threeScene,threeCamera);
+  }
+  editorLoop();
+}
+
+function add3DEditorObject(o){
+  if(!threeScene)return;
+  const col=new THREE.Color(o.color||'#aaa');
+  let mesh;
+  const scale=0.015;
+  const px=(o.x+o.w/2-200)*scale*10;
+  const pz=(o.y+o.h/2-300)*scale*10;
+
+  if(o.type==='player'||o.type==='npc'||o.type==='zombie'){
+    const g=new THREE.Group();
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.5,0.8,0.3),new THREE.MeshLambertMaterial({color:col})),{position:{x:0,y:0.9,z:0}}));
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.24,8,8),new THREE.MeshLambertMaterial({color:col}));
+    head.position.y=1.55;g.add(head);
+    g.position.set(px,0,pz);g.userData={type:o.type,id:o.id};
+    threeScene.add(g);threeMeshes.set(o.id,g);return;
+  }
+  if(o.type==='car'||o.type==='racecar'){
+    const g=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.45,0.85),new THREE.MeshLambertMaterial({color:col}));
+    body.position.y=0.3;g.add(body);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.38,0.8),new THREE.MeshLambertMaterial({color:col,opacity:0.9,transparent:true}));
+    roof.position.set(-0.1,0.66,0);g.add(roof);
+    const wGeo=new THREE.CylinderGeometry(0.18,0.18,0.12,10);
+    const wMat=new THREE.MeshLambertMaterial({color:0x111111});
+    [[-0.7,0,0.48],[0.7,0,0.48],[-0.7,0,-0.48],[0.7,0,-0.48]].forEach(([wx,wy,wz])=>{
+      const w=new THREE.Mesh(wGeo,wMat);w.rotation.z=Math.PI/2;w.position.set(wx,0.18,wz);g.add(w);
+    });
+    g.position.set(px,0,pz);g.userData={type:o.type,id:o.id};
+    threeScene.add(g);threeMeshes.set(o.id,g);return;
+  }
+  if(o.type==='truck'||o.type==='bus'){
+    const g=new THREE.Group();
+    const cargo=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.9,0.9),new THREE.MeshLambertMaterial({color:col,opacity:0.7,transparent:true}));
+    cargo.position.set(-0.4,0.55,0);g.add(cargo);
+    const cabin=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.85,0.88),new THREE.MeshLambertMaterial({color:col}));
+    cabin.position.set(1.1,0.55,0);g.add(cabin);
+    const wGeo=new THREE.CylinderGeometry(0.2,0.2,0.14,10);
+    const wMat=new THREE.MeshLambertMaterial({color:0x111});
+    [[-0.8,0,0.52],[0.1,0,0.52],[1.0,0,0.52],[-0.8,0,-0.52],[0.1,0,-0.52],[1.0,0,-0.52]].forEach(([wx,wy,wz])=>{
+      const w=new THREE.Mesh(wGeo,wMat);w.rotation.z=Math.PI/2;w.position.set(wx,0.2,wz);g.add(w);
+    });
+    g.position.set(px,0,pz);g.userData={type:o.type,id:o.id};
+    threeScene.add(g);threeMeshes.set(o.id,g);return;
+  }
+  // Generic box
+  const sizes={platform:[2.5,0.25,1],wall:[0.25,1.8,1],coin:[0.3,0.3,0.3],gem:[0.3,0.45,0.3],money:[0.4,0.25,0.05],spike:[0.3,0.4,0.3],box:[0.6,0.6,0.6],door:[0.4,1.1,0.2]};
+  const s=sizes[o.type]||[0.7,0.7,0.7];
+  const mat=new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:0.85});
+  const edges=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...s)),new THREE.LineBasicMaterial({color:col,opacity:0.5,transparent:true}));
+  mesh=new THREE.Mesh(new THREE.BoxGeometry(...s),mat);
+  mesh.position.set(px,s[1]/2,pz);mesh.userData={type:o.type,id:o.id};
+  if(o.type==='shop_electronics'||o.type==='shop_food'||o.type==='shop_weapons'||o.type==='shop_cars'||o.type==='shop_clothes'){
+    // Shops are bigger
+    mesh.scale.set(1.5,1.5,1.5);
+  }
+  threeScene.add(mesh);threeScene.add(edges);
+  threeMeshes.set(o.id,mesh);
+}
+
+function stopEditor3D(){
+  if(threeAnimFrame){cancelAnimationFrame(threeAnimFrame);threeAnimFrame=null;}
+  if(threeRenderer){threeRenderer.dispose();threeRenderer=null;}
+  threeScene=null;threeCamera=null;threeMeshes.clear();
+}
+
+// ═══════════════════════════════════════
+// 2D SCENE DRAW
+// ═══════════════════════════════════════
+function drawScene2D(){
+  const wrap=document.getElementById('scene-wrap');
+  const canvas=document.getElementById('scene-canvas-2d');
+  canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight-0;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  objects.forEach(o=>{
+    const sel=selectedObj&&selectedObj.id===o.id;
+    ctx.save();
+    if(sel){ctx.shadowBlur=14;ctx.shadowColor=o.color;}
+    if(editorMode==='iso') drawIso2D(ctx,o);
+    else drawObj2D(ctx,o,sel);
+    if(sel){
+      ctx.shadowBlur=0;ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+      ctx.strokeRect(o.x-3,o.y-3,o.w+6,o.h+6);ctx.setLineDash([]);
+    }
+    ctx.restore();
+  });
+}
+function drawObj2D(ctx,o,sel){
+  const c=o.color||'#aaa';
+  if(o.type==='player'||o.type==='npc'||o.type==='zombie') drawPersonScene(ctx,o);
+  else if(o.type==='car'||o.type==='racecar') drawCarScene(ctx,o);
+  else if(o.type==='truck'||o.type==='bus') drawTruckScene(ctx,o);
+  else if(o.type==='motorbike') drawMotorbikeScene(ctx,o);
+  else if(o.type.startsWith('shop_')) drawShopScene(ctx,o);
+  else if(o.type==='money') drawMoneyObj(ctx,o);
+  else {
+    ctx.fillStyle=c+'33';ctx.strokeStyle=c;ctx.lineWidth=sel?2.5:1.5;
+    ctx.beginPath();ctx.roundRect(o.x,o.y,o.w,o.h,4);ctx.fill();ctx.stroke();
+    ctx.font=`${Math.min(o.w,o.h)*0.62}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(getEmoji(o.type),o.x+o.w/2,o.y+o.h/2);
+  }
+}
+function drawIso2D(ctx,o){
+  const ix=o.x,iy=o.y,iw=o.w*0.8,ih=o.h*0.4,id=Math.min(o.h*0.3,20);
+  const c=o.color;
+  ctx.fillStyle=c+'44';ctx.strokeStyle=c;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(ix+iw/2,iy);ctx.lineTo(ix+iw,iy+ih/2);ctx.lineTo(ix+iw/2,iy+ih);ctx.lineTo(ix,iy+ih/2);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=c+'33';ctx.beginPath();ctx.moveTo(ix,iy+ih/2);ctx.lineTo(ix+iw/2,iy+ih);ctx.lineTo(ix+iw/2,iy+ih+id);ctx.lineTo(ix,iy+ih/2+id);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle=c+'22';ctx.beginPath();ctx.moveTo(ix+iw,iy+ih/2);ctx.lineTo(ix+iw/2,iy+ih);ctx.lineTo(ix+iw/2,iy+ih+id);ctx.lineTo(ix+iw,iy+ih/2+id);ctx.closePath();ctx.fill();ctx.stroke();
+}
+function drawPersonScene(ctx,o){
+  const cx=o.x+o.w/2,by=o.y+o.h,c=o.color;
+  ctx.strokeStyle=c;ctx.lineWidth=3.5;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(cx-5,by-16);ctx.lineTo(cx-7,by);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+5,by-16);ctx.lineTo(cx+7,by);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,by-16);ctx.lineTo(cx-11,by-24);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,by-16);ctx.lineTo(cx+11,by-24);ctx.stroke();
+  ctx.lineWidth=4.5;ctx.beginPath();ctx.moveTo(cx,by-16);ctx.lineTo(cx,by-40);ctx.stroke();
+  ctx.fillStyle=c+'44';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,by-48,10,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle=c;ctx.beginPath();ctx.arc(cx-3.5,by-49,1.8,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(cx+3.5,by-49,1.8,0,Math.PI*2);ctx.fill();
+}
+function drawCarScene(ctx,o){
+  const c=o.color;
+  ctx.fillStyle=c+'33';ctx.strokeStyle=c;ctx.lineWidth=2;
+  ctx.beginPath();ctx.roundRect(o.x,o.y+o.h*0.35,o.w,o.h*0.55,5);ctx.fill();ctx.stroke();
+  ctx.fillStyle=c+'55';ctx.beginPath();ctx.roundRect(o.x+o.w*0.2,o.y,o.w*0.55,o.h*0.42,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle='rgba(180,240,255,0.3)';
+  ctx.beginPath();ctx.roundRect(o.x+o.w*0.23,o.y+o.h*0.05,o.w*0.22,o.h*0.28,3);ctx.fill();
+  ctx.beginPath();ctx.roundRect(o.x+o.w*0.49,o.y+o.h*0.05,o.w*0.22,o.h*0.28,3);ctx.fill();
+  const wy=o.y+o.h*0.82,wr=o.h*0.2;
+  ctx.fillStyle='#111';ctx.strokeStyle=c;ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(o.x+o.w*0.22,wy,wr,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.arc(o.x+o.w*0.78,wy,wr,0,Math.PI*2);ctx.fill();ctx.stroke();
+}
+function drawTruckScene(ctx,o){
+  const c=o.color;
+  ctx.fillStyle=c+'22';ctx.strokeStyle=c;ctx.lineWidth=2;
+  ctx.beginPath();ctx.roundRect(o.x,o.y+o.h*0.1,o.w*0.62,o.h*0.75,4);ctx.fill();ctx.stroke();
+  ctx.fillStyle=c+'44';ctx.beginPath();ctx.roundRect(o.x+o.w*0.65,o.y,o.w*0.35,o.h*0.82,6);ctx.fill();ctx.stroke();
+  const wy=o.y+o.h*0.85,wr=o.h*0.18;
+  ctx.fillStyle='#111';ctx.strokeStyle=c;ctx.lineWidth=2;
+  [0.1,0.38,0.78].forEach(xf=>{ctx.beginPath();ctx.arc(o.x+o.w*xf,wy,wr,0,Math.PI*2);ctx.fill();ctx.stroke();});
+}
+function drawMotorbikeScene(ctx,o){
+  const c=o.color;
+  ctx.strokeStyle=c;ctx.lineWidth=2;ctx.fillStyle=c+'33';
+  ctx.beginPath();ctx.arc(o.x+o.w*0.2,o.y+o.h*0.7,o.h*0.28,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.arc(o.x+o.w*0.8,o.y+o.h*0.7,o.h*0.28,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(o.x+o.w*0.2,o.y+o.h*0.7);ctx.lineTo(o.x+o.w*0.8,o.y+o.h*0.7);ctx.stroke();
+}
+function drawShopScene(ctx,o){
+  const c=o.color;
+  ctx.fillStyle=c+'22';ctx.strokeStyle=c;ctx.lineWidth=2;
+  ctx.beginPath();ctx.roundRect(o.x,o.y,o.w,o.h,8);ctx.fill();ctx.stroke();
+  ctx.fillStyle=c+'55';ctx.beginPath();ctx.moveTo(o.x-4,o.y+12);ctx.lineTo(o.x+o.w+4,o.y+12);ctx.lineTo(o.x+o.w,o.y);ctx.lineTo(o.x,o.y);ctx.closePath();ctx.fill();
+  ctx.font='18px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(getEmoji(o.type),o.x+o.w/2,o.y+o.h/2);
+}
+function drawMoneyObj(ctx,o){
+  const c='#ffd60a';
+  ctx.save();ctx.shadowBlur=10;ctx.shadowColor=c;
+  ctx.fillStyle=c+'44';ctx.strokeStyle=c;ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(o.x+o.w/2,o.y+o.h/2,o.w/2,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.font='10px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('💵',o.x+o.w/2,o.y+o.h/2);
+  // Amount label
+  if(o.amount){
+    ctx.shadowBlur=0;ctx.font='bold 8px Orbitron,monospace';ctx.fillStyle='#ffd60a';
+    ctx.fillText(o.amount+'Kč',o.x+o.w/2,o.y-6);
+  }
+  ctx.restore();
+}
+
+function drawScene(){drawScene2D();}
+
+// Touch/drag for 2D scene
+let dragging=false,dragOffX=0,dragOffY=0;
+document.getElementById('scene-canvas-2d').addEventListener('pointerdown',e=>{
+  const r=e.target.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  let hit=null;
+  for(let i=objects.length-1;i>=0;i--){const o=objects[i];if(x>=o.x&&x<=o.x+o.w&&y>=o.y&&y<=o.y+o.h){hit=o;break;}}
+  if(currentTool==='delete'&&hit){deleteObject(hit.id);return;}
+  selectObj(hit?hit.id:null);
+  if(hit){dragging=true;dragOffX=x-hit.x;dragOffY=y-hit.y;}
+  renderProps();
+});
+document.getElementById('scene-canvas-2d').addEventListener('pointermove',e=>{
+  if(!dragging||!selectedObj)return;
+  const r=e.target.getBoundingClientRect();
+  selectedObj.x=Math.round(e.clientX-r.left-dragOffX);
+  selectedObj.y=Math.round(e.clientY-r.top-dragOffY);
+  drawScene2D();renderObjectList();
+});
+document.getElementById('scene-canvas-2d').addEventListener('pointerup',()=>dragging=false);
+function setTool(t){
+  currentTool=t;
+  document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+  const btn=document.getElementById('tool-'+t);if(btn)btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════
+// OBJECTS
+// ═══════════════════════════════════════
+function addObject(type){
+  const wrap=document.getElementById('scene-wrap');
+  const def=OBJ_DEF[type]||OBJ_DEF.coin;
+  const o={
+    id:nextId++,type,
+    x:Math.round(40+Math.random()*(Math.max(wrap.clientWidth-def.w-80,40))),
+    y:Math.round(40+Math.random()*(Math.max(wrap.clientHeight-210,40))),
+    ...JSON.parse(JSON.stringify(def)),
+    color:COLORS[type]||'#aaa',
+    name:type.charAt(0).toUpperCase()+type.slice(1).replace('_',' ')+' '+nextId
+  };
+  objects.push(o);
+  renderObjectList();drawScene2D();
+  if(editorMode==='3d'&&threeScene)add3DEditorObject(o);
+}
+function deleteObject(id){
+  objects=objects.filter(o=>o.id!==id);
+  if(selectedObj&&selectedObj.id===id)selectedObj=null;
+  if(threeScene){const m=threeMeshes.get(id);if(m)threeScene.remove(m);threeMeshes.delete(id);}
+  renderObjectList();drawScene2D();
+}
+function renderObjectList(){
+  document.getElementById('obj-empty').style.display=objects.length?'none':'block';
+  document.getElementById('obj-items').innerHTML=objects.map(o=>`
+    <div class="obj-item ${selectedObj&&selectedObj.id===o.id?'selected':''}" onclick="selectObj(${o.id})">
+      <div class="obj-icon">${getEmoji(o.type)}</div>
+      <div class="obj-info">
+        <div class="obj-name">${o.name}</div>
+        <div class="obj-type">${o.type}${o.amount?` · 💵${o.amount}Kč`:''} · ${o.x|0},${o.y|0}</div>
+      </div>
+      <span class="obj-del" onclick="event.stopPropagation();deleteObject(${o.id})">✕</span>
+    </div>`).join('');
+}
+function getEmoji(t){
+  return{player:'🧑',npc:'🧔',enemy:'👾',zombie:'🧟',animal:'🐾',car:'🚗',truck:'🚚',racecar:'🏎️',bus:'🚌',motorbike:'🏍️',platform:'🟫',wall:'🧱',door:'🚪',spike:'⚡',box:'📦',shop_electronics:'💻',shop_food:'🥦',shop_weapons:'⚔️',shop_cars:'🚘',shop_clothes:'👕',money:'💵',coin:'🪙',gem:'💎',checkpoint:'🚩',teleport:'🌀',light:'💡'}[t]||'📦';
+}
+function selectObj(id){
+  selectedObj=objects.find(o=>o.id===id)||null;
+  renderObjectList();renderProps();drawScene2D();
+}
+function renderProps(){
+  const el=document.getElementById('props-content');
+  if(!selectedObj){el.innerHTML='<p style="color:var(--muted);font-size:0.76em">Vyber objekt</p>';return;}
+  const o=selectedObj;
+  const moneyExtra=o.type==='money'?`
+    <div class="prop-row"><span class="prop-label">Kč</span>
+      <input class="prop-input" type="number" value="${o.amount||100}" min="1"
+        onchange="selectedObj.amount=+this.value;selectedObj.value=+this.value;renderObjectList();drawScene2D()" style="color:var(--accent3);font-weight:700"/>
+      <button style="padding:4px 8px;border-radius:5px;background:var(--accent3);color:#000;border:none;font-size:0.7em;font-weight:700;cursor:pointer" onclick="switchTab('money')">✏️ Editor</button>
+    </div>`:
+  o.type==='npc'?`<div class="prop-row"><span class="prop-label">Dialog</span><input class="prop-input" value="${o.dialog||'Ahoj!'}" onchange="selectedObj.dialog=this.value"/></div>`:'';
+  el.innerHTML=`
+    <div class="prop-row"><span class="prop-label">Název</span>
+      <input class="prop-input" value="${o.name}" onchange="selectedObj.name=this.value;renderObjectList()"/></div>
+    <div class="prop-row">
+      <span class="prop-label">X</span><input class="prop-input" type="number" value="${o.x|0}" onchange="selectedObj.x=+this.value;drawScene2D()"/>
+      <span class="prop-label">Y</span><input class="prop-input" type="number" value="${o.y|0}" onchange="selectedObj.y=+this.value;drawScene2D()"/>
+    </div>${moneyExtra}
+    <div class="prop-row"><span class="prop-label">Barva</span>
+      <div class="color-swatch">
+        ${['#00f5d4','#f72585','#ffd60a','#7b2fff','#00b0ff','#00e676','#ff6d00','#fff'].map(c=>`
+          <div class="swatch ${o.color===c?'selected':''}" style="background:${c}" onclick="selectedObj.color='${c}';renderProps();drawScene2D()"></div>`).join('')}
+      </div></div>`;
+}
+
+// ═══════════════════════════════════════
+// MONEY EDITOR
+// ═══════════════════════════════════════
+function refreshMoneyPanel(){
+  document.getElementById('money-start').value=moneySettings.startMoney;
+  document.getElementById('money-max').value=moneySettings.maxMoney;
+  document.getElementById('coin-value-global').value=moneySettings.coinValue;
+  document.getElementById('gem-value-global').value=moneySettings.gemValue;
+  document.getElementById('money-difficulty').value=moneySettings.difficulty;
+  document.getElementById('diff-val').textContent=moneySettings.difficulty+'x';
+  // Apply saved shop prices
+  Object.entries(shopPrices).forEach(([id,price])=>{
+    const el=document.getElementById('sp-'+id);if(el)el.value=price;
+  });
+  // Money objects list
+  const moneyObjs=objects.filter(o=>o.type==='money');
+  const list=document.getElementById('money-obj-list');
+  if(moneyObjs.length===0){
+    list.innerHTML='<p style="font-size:0.75em;color:var(--muted);text-align:center;padding:12px;">Přidej objekty 💵 Peníze ve scéně.</p>';
+  } else {
+    list.innerHTML=moneyObjs.map(o=>`
+      <div class="money-obj-item">
+        <div class="icon">💵</div>
+        <div class="info"><div class="name">${o.name}</div></div>
+        <input type="number" value="${o.amount||100}" min="1" max="999999"
+          onchange="setMoneyObjAmount(${o.id},+this.value)"
+          style="width:90px;background:#1a1a28;border:1px solid var(--border);color:var(--accent3);padding:4px 7px;border-radius:5px;font-size:0.82em;font-family:'Orbitron',monospace;text-align:center;"/>
+        <span style="font-size:0.68em;color:var(--muted);">Kč</span>
+      </div>`).join('');
+  }
+}
+function updateMoneySettings(){
+  moneySettings.startMoney=parseInt(document.getElementById('money-start').value)||0;
+  moneySettings.maxMoney=parseInt(document.getElementById('money-max').value)||999999;
+  moneySettings.coinValue=parseInt(document.getElementById('coin-value-global').value)||10;
+  moneySettings.gemValue=parseInt(document.getElementById('gem-value-global').value)||25;
+  moneySettings.difficulty=parseFloat(document.getElementById('money-difficulty').value)||1;
+}
+function setMoneyObjAmount(id,val){
+  const o=objects.find(o=>o.id===id);
+  if(o){o.amount=val;o.value=val;renderObjectList();drawScene2D();}
+}
+function applyMoneyPreset(preset){
+  const presets={
+    broke:   {start:0,   coin:5,   gem:10,  diff:2.0},
+    normal:  {start:0,   coin:10,  gem:25,  diff:1.0},
+    rich:    {start:500, coin:50,  gem:100, diff:0.5},
+    millionaire:{start:10000,coin:500,gem:1000,diff:0.1},
+  };
+  if(preset==='custom'){
+    document.getElementById('custom-money-row').style.display='flex';return;
+  }
+  const p=presets[preset];if(!p)return;
+  moneySettings.startMoney=p.start;
+  moneySettings.coinValue=p.coin;
+  moneySettings.gemValue=p.gem;
+  moneySettings.difficulty=p.diff;
+  document.getElementById('money-start').value=p.start;
+  document.getElementById('coin-value-global').value=p.coin;
+  document.getElementById('gem-value-global').value=p.gem;
+  document.getElementById('money-difficulty').value=p.diff;
+  document.getElementById('diff-val').textContent=p.diff+'x';
+  document.getElementById('custom-money-row').style.display='none';
+}
+function setCustomMoney(){
+  const val=parseInt(document.getElementById('custom-money-val').value)||0;
+  moneySettings.startMoney=val;
+  document.getElementById('money-start').value=val;
+  document.getElementById('custom-money-row').style.display='none';
+}
+function updateShopPrice(id,val){
+  shopPrices[id]=parseInt(val)||0;
+  // Update catalogs
+  Object.values(SHOP_CATALOGS).forEach(cat=>cat.forEach(item=>{if(item.id===id)item.price=shopPrices[id];}));
+}
+
+// ═══════════════════════════════════════
+// CODE EDITOR
+// ═══════════════════════════════════════
+function initCodePanel(){
+  const sel=document.getElementById('script-select');
+  const cur=sel.value;
+  sel.innerHTML='';
+  const all={...DEFAULT_SCRIPTS,...savedScripts};
+  Object.keys(all).forEach(k=>{
+    const op=document.createElement('option');op.value=k;op.textContent=k;sel.appendChild(op);
+  });
+  if(cur&&all[cur])sel.value=cur;
+  loadScript();
+}
+function loadScript(){
+  const sel=document.getElementById('script-select').value;
+  const all={...DEFAULT_SCRIPTS,...savedScripts};
+  document.getElementById('code-editor').value=all[sel]||'';
+}
+function saveScript(){
+  const sel=document.getElementById('script-select').value;
+  savedScripts[sel]=document.getElementById('code-editor').value;
+  document.getElementById('code-output').textContent='✅ Uloženo: '+sel;
+  document.getElementById('code-output').style.color='var(--accent)';
+}
+function createScript(){
+  let name=document.getElementById('script-name-input').value.trim();
+  if(!name)name='script_'+Date.now();
+  if(!name.endsWith('.js'))name+='.js';
+  savedScripts[name]=`// ${name}\n\nfunction init(){\n  // Inicializace\n}\n\nfunction update(dt){\n  // Každý frame\n}\n`;
+  initCodePanel();
+  document.getElementById('script-select').value=name;
+  loadScript();
+  document.getElementById('script-name-input').value='';
+}
+function deleteScript(){
+  const sel=document.getElementById('script-select').value;
+  if(DEFAULT_SCRIPTS[sel]){document.getElementById('code-output').textContent='❌ Nelze smazat výchozí script!';return;}
+  if(!confirm('Smazat '+sel+'?'))return;
+  delete savedScripts[sel];initCodePanel();
+}
+function runScript(){
+  const out=document.getElementById('code-output');
+  try{new Function(document.getElementById('code-editor').value);out.textContent='✅ Syntaxe OK';out.style.color='var(--accent)';}
+  catch(e){out.textContent='❌ '+e.message;out.style.color='var(--accent2)';}
+}
+
+// ═══════════════════════════════════════
+// SHOP
+// ═══════════════════════════════════════
+function openShop(shopType,shopName){
+  shopOpen=true;
+  document.getElementById('shop-overlay').style.display='flex';
+  document.getElementById('shop-title').textContent=shopName||shopType;
+  document.getElementById('shop-balance').textContent='💵 '+playerMoney;
+  document.getElementById('shop-msg').textContent='';
+  const items=SHOP_CATALOGS[shopType]||[];
+  document.getElementById('shop-items').innerHTML=items.map(item=>`
+    <div class="shop-item" onclick="buyItem('${item.id}','${shopType}',${item.price},'${item.name}')">
+      <div class="si-icon">${item.icon}</div>
+      <div class="si-name">${item.name}</div>
+      <div class="si-price">💵 ${item.price} Kč</div>
+      <div class="si-desc">${item.desc}</div>
+    </div>`).join('');
+}
+function closeShop(){shopOpen=false;document.getElementById('shop-overlay').style.display='none';}
+function buyItem(id,shopType,price,name){
+  const realPrice=shopPrices[id]||price;
+  if(playerMoney<realPrice){
+    document.getElementById('shop-msg').textContent='❌ Nedostatek! Potřebuješ 💵'+realPrice+' Kč';return;
+  }
+  playerMoney-=realPrice;
+  playerMoney=Math.min(playerMoney,moneySettings.maxMoney);
+  document.getElementById('shop-balance').textContent='💵 '+playerMoney;
+  document.getElementById('hud-money').textContent='💵 '+playerMoney;
+  document.getElementById('shop-msg').textContent='✅ Koupeno: '+name+' (💵'+playerMoney+' Kč zbývá)';
+  const pl=gameObjs.find(o=>o.type==='player'&&o.active);
+  if(pl){
+    if(shopType==='food'){const f=SHOP_CATALOGS.food.find(i=>i.id===id);if(f)lives=Math.min(10,lives+(f.heal||10)/10);}
+    if(id==='boots')pl.speed=(pl.speed||3)+1;
+    if(id==='armor')lives=Math.min(lives+2,10);
+  }
+  if(typeof settings!=='undefined'&&settings.pcBuilder&&(id==='pc'||id==='laptop')){
+    setTimeout(()=>openPCBuilder(),600);
+  }
+}
+
+// ═══════════════════════════════════════
+// GAME ENGINE – 2D
+// ═══════════════════════════════════════
+function runGame(){
+  if(!objects.length){alert('Přidej objekty!');switchTab('objects');return;}
+  stopGame(false);
+  const is3D=gameMode==='3d';
+  document.getElementById('mode-indicator').textContent=is3D?'3D MODE':'2D MODE';
+  document.getElementById('game-canvas-2d').style.display=is3D?'none':'block';
+  document.getElementById('game-canvas-3d').style.display=is3D?'block':'none';
+  document.getElementById('cam-btns').style.display=is3D?'flex':'none';
+  if(is3D) runGame3D(); else runGame2D();
+}
+
+function runGame2D(){
+  gameRunning=true;score=0;lives=3;elapsed=0;
+  playerMoney=moneySettings.startMoney;
+  closeShop();
+  document.getElementById('game-overlay').style.display='none';
+  document.getElementById('game-hud').style.display='flex';
+  document.getElementById('dpad').style.display='grid';
+  document.getElementById('action-btns').style.display='flex';
+  const hasV=objects.some(o=>o.isVehicle);
+  document.getElementById('gas-btn').style.display=hasV?'flex':'none';
+  document.getElementById('hud-money').textContent='💵 '+playerMoney;
+
+  gameObjs=objects.map(o=>({...JSON.parse(JSON.stringify(o)),vx:0,vy:0,dir:1,onGround:false,active:true,_t:0}));
+  particles=[];
+  const canvas=document.getElementById('game-canvas-2d');
+  const wrap=document.getElementById('game-wrap');
+  canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;
+  const ctx=canvas.getContext('2d');
+  const t0=performance.now();let lt=t0;
+
+  function loop(now){
+    if(!gameRunning||gameMode!=='2d')return;
+    const dt=(now-lt)/1000;lt=now;elapsed=((now-t0)/1000)|0;
+    const cw=canvas.width,ch=canvas.height;
+    const pl=gameObjs.find(o=>(o.type==='player'||o.isVehicle)&&o.active);
+    if(pl&&!shopOpen){
+      const isV=pl.isVehicle||['car','racecar','truck','bus','motorbike'].includes(pl.type);
+      if(isV){if(keys.right||keys.gas)pl.vx+=0.55;if(keys.left)pl.vx-=0.55;pl.vx*=0.91;pl.vx=Math.max(-(pl.maxSpeed||8)*0.5,Math.min(pl.maxSpeed||8,pl.vx));}
+      else{if(keys.left)pl.vx=-pl.speed;else if(keys.right)pl.vx=pl.speed;else pl.vx*=0.75;}
+      if((keys.up||keys.a)&&pl.onGround){pl.vy=-(pl.jump||8);pl.onGround=false;}
+      pl.vy+=0.45;pl.x+=pl.vx;pl.y+=pl.vy;
+      if(pl.x<0)pl.x=0;if(pl.x+pl.w>cw*3)pl.x=cw*3-pl.w;
+      if(pl.y+pl.h>ch){pl.y=ch-pl.h;pl.vy=0;pl.onGround=true;}
+      camX+=(pl.x-cw/2+pl.w/2-camX)*0.1;
+      camY+=(pl.y-ch*0.55+pl.h/2-camY)*0.1;
+      if(keys.e&&!shopOpen){keys.e=false;
+        const s=gameObjs.find(o=>o.active&&o.shopType&&rectsOverlap(pl,{x:o.x-35,y:o.y-35,w:o.w+70,h:o.h+70}));
+        if(s)openShop(s.shopType,s.shopName||s.type);
+      }
+    }
+    gameObjs.filter(o=>(o.type==='enemy'||o.type==='zombie')&&o.active).forEach(e=>{
+      e.x+=(e.speed||1.5)*(e.dir||1);if(e.x<0||e.x+e.w>cw*2)e.dir*=-1;
+      e.vy=(e.vy||0)+0.45;if(e.y+e.h>ch){e.y=ch-e.h;e.vy=0;e.onGround=true;}e.y+=e.vy;
+      if(pl&&Math.abs(e.x-pl.x)<180){e.x+=(pl.x>e.x?1:-1)*(e.speed||1.5)*0.6;}
+    });
+    if(pl){
+      gameObjs.filter(o=>o.active&&o!==pl).forEach(o=>{
+        if(rectsOverlap(pl,o)){
+          if(o.type==='coin'){playerMoney=Math.min(playerMoney+moneySettings.coinValue,moneySettings.maxMoney);score+=moneySettings.coinValue;o.active=false;spawn(o.x,o.y,'#ffd60a');}
+          if(o.type==='gem'){playerMoney=Math.min(playerMoney+moneySettings.gemValue,moneySettings.maxMoney);score+=moneySettings.gemValue;o.active=false;spawn(o.x,o.y,'#e040fb');}
+          if(o.type==='money'){playerMoney=Math.min(playerMoney+(o.amount||100),moneySettings.maxMoney);o.active=false;spawn(o.x,o.y,'#ffd60a');}
+          if(o.type==='enemy'||o.type==='zombie'){lives=Math.max(0,lives-1*moneySettings.difficulty);pl.x=80;pl.y=100;spawn(pl.x,pl.y,'#f72585');}
+          if(o.type==='spike'){lives=Math.max(0,lives-0.5*moneySettings.difficulty);}
+          if(o.type==='platform'||o.type==='wall'){if(pl.vy>0&&pl.y+pl.h-pl.vy<=o.y+2){pl.y=o.y-pl.h;pl.vy=0;pl.onGround=true;}}
+          if(o.type==='checkpoint'&&!o._checked){o._checked=true;score+=50;spawn(o.x,o.y,'#00e676');}
+          if(o.type==='teleport'){pl.x=cw/2;pl.y=ch/2;spawn(pl.x,pl.y,'#7b2fff');}
+        }
+      });
+    }
+    if(lives<=0){stopGame('💀 Game Over!');return;}
+    particles=particles.filter(p=>{p.life-=dt;p.x+=p.vx;p.y+=p.vy;p.vy+=0.1;return p.life>0;});
+    document.getElementById('hud-score').textContent='⭐ '+score;
+    document.getElementById('hud-money').textContent='💵 '+playerMoney;
+    document.getElementById('hud-lives').textContent='❤️'.repeat(Math.max(0,Math.ceil(lives)));
+    document.getElementById('hud-time').textContent='⏱ '+elapsed+'s';
+    // DRAW
+    ctx.clearRect(0,0,cw,ch);
+    ctx.save();ctx.translate(-camX,-camY);
+    const bg=ctx.createLinearGradient(camX,camY,camX,camY+ch);
+    bg.addColorStop(0,'#050520');bg.addColorStop(1,'#0a0520');ctx.fillStyle=bg;ctx.fillRect(camX,camY,cw,ch);
+    const gy=ch-camY-60;
+    ctx.fillStyle='#1a4a10';ctx.fillRect(camX,gy,cw+Math.abs(camX)*2,200);
+    gameObjs.filter(o=>o.active).forEach(o=>{
+      ctx.save();ctx.shadowBlur=8;ctx.shadowColor=o.color+'88';
+      if(o.type==='player') drawPlayerGame(ctx,o);
+      else if(o.type==='npc'||o.type==='zombie') drawPersonScene(ctx,o);
+      else if(o.type==='car'||o.type==='racecar') drawCarScene(ctx,o);
+      else if(o.type==='truck'||o.type==='bus') drawTruckScene(ctx,o);
+      else if(o.type==='motorbike') drawMotorbikeScene(ctx,o);
+      else if(o.type.startsWith('shop_')){
+        drawShopScene(ctx,o);
+        if(pl&&rectsOverlap(pl,{x:o.x-50,y:o.y-50,w:o.w+100,h:o.h+100})){
+          ctx.shadowBlur=0;ctx.fillStyle='rgba(0,0,0,0.7)';ctx.beginPath();ctx.roundRect(o.x+o.w/2-32,o.y-22,64,16,5);ctx.fill();
+          ctx.fillStyle=o.color;ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText('[E] Vstoupit',o.x+o.w/2,o.y-14);
+        }
+      }
+      else if(o.type==='money') drawMoneyObj(ctx,o);
+      else {
+        ctx.fillStyle=o.color+'33';ctx.strokeStyle=o.color;ctx.lineWidth=2;
+        ctx.beginPath();ctx.roundRect(o.x,o.y,o.w,o.h,4);ctx.fill();ctx.stroke();
+        ctx.shadowBlur=0;ctx.font=Math.min(o.w,o.h)*0.6+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(getEmoji(o.type),o.x+o.w/2,o.y+o.h/2);
+      }
+      ctx.restore();
+    });
+    particles.forEach(p=>{ctx.save();ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.restore();});
+    ctx.restore();
+    animFrame=requestAnimationFrame(loop);
+  }
+  animFrame=requestAnimationFrame(loop);
+}
+
+function drawPlayerGame(ctx,o){
+  const cx=o.x+o.w/2,by=o.y+o.h,c=o.color;
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.beginPath();ctx.ellipse(cx,by+3,11,3,0,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=c;ctx.lineWidth=4;ctx.lineCap='round';
+  const la=Math.sin(Date.now()*0.01)*7;
+  ctx.beginPath();ctx.moveTo(cx,by-18);ctx.lineTo(cx-7+la,by);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,by-18);ctx.lineTo(cx+7-la,by);ctx.stroke();
+  ctx.lineWidth=3.5;ctx.beginPath();ctx.moveTo(cx,by-36);ctx.lineTo(cx-12,by-24);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,by-36);ctx.lineTo(cx+12,by-24);ctx.stroke();
+  ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(cx,by-18);ctx.lineTo(cx,by-42);ctx.stroke();
+  ctx.fillStyle=c+'55';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,by-51,10,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle=c;ctx.beginPath();ctx.arc(cx-3.5,by-52,2,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(cx+3.5,by-52,2,0,Math.PI*2);ctx.fill();
+}
+
+// ═══════════════════════════════════════
+// GAME ENGINE – 3D (Three.js)
+// ═══════════════════════════════════════
+let g3Renderer=null,g3Scene=null,g3Camera=null,g3PlayerMesh=null;
+let g3Meshes=new Map(),g3AnimFrame=null;
+
+function runGame3D(){
+  gameRunning=true;score=0;lives=3;elapsed=0;
+  playerMoney=moneySettings.startMoney;
+  closeShop();
+  document.getElementById('game-overlay').style.display='none';
+  document.getElementById('game-hud').style.display='flex';
+  document.getElementById('dpad').style.display='grid';
+  document.getElementById('action-btns').style.display='flex';
+  document.getElementById('gas-btn').style.display='flex';
+  document.getElementById('hud-money').textContent='💵 '+playerMoney;
+
+  const wrap=document.getElementById('game-canvas-3d');
+  const W=wrap.clientWidth||window.innerWidth;
+  const H=wrap.clientHeight||window.innerHeight;
+
+  if(g3Renderer){g3Renderer.dispose();}
+  g3Renderer=new THREE.WebGLRenderer({antialias:true});
+  g3Renderer.setSize(W,H);g3Renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  g3Renderer.shadowMap.enabled=true;g3Renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  wrap.innerHTML='';wrap.appendChild(g3Renderer.domElement);
+
+  g3Scene=new THREE.Scene();
+  g3Scene.background=new THREE.Color(0x050520);
+  g3Scene.fog=new THREE.FogExp2(0x050520,0.025);
+
+  g3Camera=new THREE.PerspectiveCamera(65,W/H,0.1,300);
+
+  // Lighting
+  g3Scene.add(new THREE.AmbientLight(0x334466,0.8));
+  const sun=new THREE.DirectionalLight(0xffeedd,1.4);
+  sun.position.set(15,25,15);sun.castShadow=true;
+  sun.shadow.mapSize.width=1024;sun.shadow.mapSize.height=1024;
+  g3Scene.add(sun);
+  g3Scene.add(Object.assign(new THREE.DirectionalLight(0x8899ff,0.4),{position:new THREE.Vector3(-10,5,-10)}));
+
+  // Ground
+  const groundGeo=new THREE.PlaneGeometry(80,80,20,20);
+  const groundMat=new THREE.MeshLambertMaterial({color:0x1a3a0a});
+  const ground=new THREE.Mesh(groundGeo,groundMat);
+  ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;g3Scene.add(ground);
+  g3Scene.add(new THREE.GridHelper(80,20,0x1e1e32,0x1e1e32));
+
+  // Sky stars
+  const starGeo=new THREE.BufferGeometry();
+  const starVerts=[];
+  for(let i=0;i<600;i++)starVerts.push((Math.random()-0.5)*200,(Math.random()*100)+10,(Math.random()-0.5)*200);
+  starGeo.setAttribute('position',new THREE.Float32BufferAttribute(starVerts,3));
+  g3Scene.add(new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xffffff,size:0.3})));
+
+  // Build 3D objects from scene objects
+  g3Meshes.clear();g3PlayerMesh=null;
+  gameObjs=objects.map(o=>({...JSON.parse(JSON.stringify(o)),vx:0,vy:0,vy3d:0,speed3d:0,dir:1,onGround:true,active:true,_t:0}));
+  gameObjs.forEach(o=>{
+    const mesh=build3DMesh(o);
+    if(mesh){g3Scene.add(mesh);g3Meshes.set(o.id,mesh);o.mesh=mesh;
+      if(o.type==='player')g3PlayerMesh=mesh;
+    }
+  });
+
+  const t0=performance.now();let lt=t0;
+
+  function loop3D(now){
+    if(!gameRunning||gameMode!=='3d')return;
+    const dt=Math.min((now-lt)/1000,0.05);lt=now;elapsed=((now-t0)/1000)|0;
+    const pl=gameObjs.find(o=>(o.type==='player')&&o.active);
+
+    if(pl&&pl.mesh&&!shopOpen){
+      const spd=pl.speed||3;
+      if(keys.left)  pl.mesh.position.x-=spd*dt*60*0.06;
+      if(keys.right) pl.mesh.position.x+=spd*dt*60*0.06;
+      if(keys.forward||keys.up) pl.mesh.position.z-=spd*dt*60*0.06;
+      if(keys.back||keys.down)  pl.mesh.position.z+=spd*dt*60*0.06;
+      if(keys.a&&pl.onGround){pl.vy3d=5;pl.onGround=false;}
+      pl.vy3d-=9.8*dt;
+      pl.mesh.position.y+=pl.vy3d*dt;
+      if(pl.mesh.position.y<=0){pl.mesh.position.y=0;pl.vy3d=0;pl.onGround=true;}
+      // Slow rotation
+      if(keys.left) pl.mesh.rotation.y+=0.06;
+      if(keys.right) pl.mesh.rotation.y-=0.06;
+    }
+
+    // Vehicle 3D
+    const vehicle=gameObjs.find(o=>o.isVehicle&&o.active&&o.mesh);
+    if(vehicle&&vehicle.mesh&&!shopOpen){
+      if(keys.right||keys.gas) vehicle.speed3d=Math.min((vehicle.speed3d||0)+0.06,vehicle.maxSpeed||8);
+      if(keys.left) vehicle.speed3d=Math.max((vehicle.speed3d||0)-0.06,-(vehicle.maxSpeed||8)*0.4);
+      vehicle.speed3d=(vehicle.speed3d||0)*0.93;
+      vehicle.mesh.position.x+=Math.sin(vehicle.mesh.rotation.y)*(vehicle.speed3d||0)*dt*4;
+      vehicle.mesh.position.z+=Math.cos(vehicle.mesh.rotation.y)*(vehicle.speed3d||0)*dt*4;
+      if(keys.up) vehicle.mesh.rotation.y-=0.04*(Math.abs(vehicle.speed3d||0)/(vehicle.maxSpeed||8));
+      if(keys.down) vehicle.mesh.rotation.y+=0.04*(Math.abs(vehicle.speed3d||0)/(vehicle.maxSpeed||8));
+      vehicle.vy3d=(vehicle.vy3d||0)-9.8*dt;
+      vehicle.mesh.position.y+=vehicle.vy3d*dt;
+      if(vehicle.mesh.position.y<=0){vehicle.mesh.position.y=0;vehicle.vy3d=0;vehicle.onGround=true;}
+    }
+
+    // Enemies in 3D
+    gameObjs.filter(o=>(o.type==='enemy'||o.type==='zombie')&&o.active&&o.mesh).forEach(e=>{
+      const spd=(e.speed||1.5)*0.04;
+      e.mesh.position.x+=(e.dir||1)*spd;
+      if(e.mesh.position.x>15||e.mesh.position.x<-15)e.dir=(e.dir||1)*-1;
+      // Chase
+      const hero=pl||vehicle;
+      if(hero&&hero.mesh){
+        const dx=hero.mesh.position.x-e.mesh.position.x;
+        const dz=hero.mesh.position.z-e.mesh.position.z;
+        if(Math.sqrt(dx*dx+dz*dz)<6){e.mesh.position.x+=dx*0.01;e.mesh.position.z+=dz*0.01;}
+      }
+      // Animate
+      e._t=(e._t||0)+dt;
+      e.mesh.rotation.y+=0.02;
+    });
+
+    // Floating coins/gems
+    gameObjs.filter(o=>(o.type==='coin'||o.type==='gem'||o.type==='money')&&o.active&&o.mesh).forEach(o=>{
+      o.mesh.rotation.y+=0.04;
+      o.mesh.position.y=0.4+Math.sin(Date.now()*0.002+o.id)*0.12;
+    });
+
+    // 3D Collisions (simple sphere check)
+    const hero=pl||vehicle;
+    if(hero&&hero.mesh){
+      gameObjs.filter(o=>o.active&&o!==hero&&o.mesh).forEach(o=>{
+        const dx=hero.mesh.position.x-o.mesh.position.x;
+        const dz=hero.mesh.position.z-o.mesh.position.z;
+        const dist=Math.sqrt(dx*dx+dz*dz);
+        const minDist=0.8;
+        if(dist<minDist){
+          if(o.type==='coin'){playerMoney=Math.min(playerMoney+moneySettings.coinValue,moneySettings.maxMoney);score+=moneySettings.coinValue;g3Scene.remove(o.mesh);o.active=false;}
+          if(o.type==='gem'){playerMoney=Math.min(playerMoney+moneySettings.gemValue,moneySettings.maxMoney);score+=moneySettings.gemValue;g3Scene.remove(o.mesh);o.active=false;}
+          if(o.type==='money'){playerMoney=Math.min(playerMoney+(o.amount||100),moneySettings.maxMoney);g3Scene.remove(o.mesh);o.active=false;}
+          if(o.type==='enemy'||o.type==='zombie'){lives=Math.max(0,lives-1*moneySettings.difficulty);}
+          if(o.shopType&&keys.e){keys.e=false;openShop(o.shopType,o.shopName);}
+        }
+      });
+    }
+
+    if(lives<=0){stopGame('💀 Game Over!');return;}
+
+    // Camera follows player/vehicle
+    const heroMesh=(pl&&pl.mesh)||(vehicle&&vehicle.mesh);
+    if(heroMesh){
+      const px=heroMesh.position.x,py=heroMesh.position.y,pz=heroMesh.position.z;
+      if(camView==='follow'){
+        g3Camera.position.set(px,py+5,pz+9);g3Camera.lookAt(px,py+1,pz);
+      } else if(camView==='top'){
+        g3Camera.position.set(px,py+14,pz+1);g3Camera.lookAt(px,py,pz);
+      } else if(camView==='side'){
+        g3Camera.position.set(px+12,py+4,pz);g3Camera.lookAt(px,py+1,pz);
+      } else {
+        // free: orbit
+        g3Camera.position.set(px+Math.sin(Date.now()*0.0002)*12,py+6,pz+Math.cos(Date.now()*0.0002)*12);
+        g3Camera.lookAt(px,py,pz);
+      }
+    }
+
+    document.getElementById('hud-score').textContent='⭐ '+score;
+    document.getElementById('hud-money').textContent='💵 '+playerMoney;
+    document.getElementById('hud-lives').textContent='❤️'.repeat(Math.max(0,Math.ceil(lives)));
+    document.getElementById('hud-time').textContent='⏱ '+elapsed+'s';
+
+    g3Renderer.render(g3Scene,g3Camera);
+    g3AnimFrame=requestAnimationFrame(loop3D);
+  }
+  g3AnimFrame=requestAnimationFrame(loop3D);
+}
+
+function build3DMesh(o){
+  const col=new THREE.Color(o.color||'#aaa');
+  const scale=0.015;
+  const px=(o.x+o.w/2-200)*scale*10;
+  const pz=(o.y+o.h/2-300)*scale*10;
+
+  if(o.type==='player'||o.type==='npc'){
+    const g=new THREE.Group();
+    const bodyMat=new THREE.MeshLambertMaterial({color:col});
+    const body=new THREE.Mesh(new THREE.BoxGeometry(0.45,0.75,0.3),bodyMat);body.position.y=0.9;g.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.23,8,8),bodyMat);head.position.y=1.5;g.add(head);
+    // Legs
+    const legMat=new THREE.MeshLambertMaterial({color:new THREE.Color(col).multiplyScalar(0.7)});
+    [-0.12,0.12].forEach(lx=>{const leg=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.5,0.14),legMat);leg.position.set(lx,0.3,0);g.add(leg);});
+    // Arms
+    [-0.32,0.32].forEach(ax=>{const arm=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.45,0.13),legMat);arm.position.set(ax,0.85,0);g.add(arm);});
+    g.position.set(px,0,pz);g.castShadow=true;return g;
+  }
+  if(o.type==='enemy'||o.type==='zombie'){
+    const g=new THREE.Group();
+    const c2=o.type==='zombie'?new THREE.Color(0x7dff6b):new THREE.Color(0xf72585);
+    const m=new THREE.MeshLambertMaterial({color:c2});
+    const body=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.3),m);body.position.y=0.85;g.add(body);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4),m);head.position.y=1.45;g.add(head);
+    g.position.set(px,0,pz);return g;
+  }
+  if(o.isVehicle||o.type==='car'||o.type==='racecar'){
+    const g=new THREE.Group();
+    const carMat=new THREE.MeshLambertMaterial({color:col});
+    const body=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.45,0.85),carMat);body.position.y=0.3;g.add(body);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.38,0.78),new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:0.9}));
+    roof.position.set(-0.1,0.65,0);g.add(roof);
+    const wGeo=new THREE.CylinderGeometry(0.18,0.18,0.12,10);
+    const wMat=new THREE.MeshLambertMaterial({color:0x111111});
+    [[-0.7,0,0.48],[0.7,0,0.48],[-0.7,0,-0.48],[0.7,0,-0.48]].forEach(([wx,wy,wz])=>{
+      const w=new THREE.Mesh(wGeo,wMat);w.rotation.z=Math.PI/2;w.position.set(wx,0.18,wz);g.add(w);
+    });
+    g.position.set(px,0,pz);g.castShadow=true;return g;
+  }
+  if(o.type==='truck'||o.type==='bus'){
+    const g=new THREE.Group();
+    const cargMat=new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:0.75});
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.2,0.85,0.9),cargMat),{position:new THREE.Vector3(-0.4,0.55,0)}));
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.7,0.85,0.88),new THREE.MeshLambertMaterial({color:col})),{position:new THREE.Vector3(1.1,0.55,0)}));
+    const wGeo=new THREE.CylinderGeometry(0.2,0.2,0.14,10),wMat=new THREE.MeshLambertMaterial({color:0x111});
+    [[-0.8,0,0.52],[0.2,0,0.52],[1.1,0,0.52],[-0.8,0,-0.52],[0.2,0,-0.52],[1.1,0,-0.52]].forEach(([wx,wy,wz])=>{const w=new THREE.Mesh(wGeo,wMat);w.rotation.z=Math.PI/2;w.position.set(wx,0.2,wz);g.add(w);});
+    g.position.set(px,0,pz);g.castShadow=true;return g;
+  }
+  // Platform, wall, etc
+  const sizes={platform:[2.5,0.25,1],wall:[0.25,1.8,1],coin:[0.3,0.3,0.3],gem:[0.35,0.45,0.35],money:[0.35,0.25,0.05],spike:[0.3,0.5,0.3],box:[0.65,0.65,0.65],door:[0.4,1.1,0.2],checkpoint:[0.6,1.2,0.1]};
+  const s=sizes[o.type]||[0.7,0.7,0.7];
+  if(o.type.startsWith('shop_')){
+    const g=new THREE.Group();
+    const shopMat=new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:0.7});
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.6,1.4,1.4),shopMat),{position:new THREE.Vector3(0,0.7,0)}));
+    const roof=new THREE.Mesh(new THREE.CylinderGeometry(0,1.1,0.6,4),new THREE.MeshLambertMaterial({color:col}));
+    roof.position.y=1.7;g.add(roof);
+    g.position.set(px,0,pz);return g;
+  }
+  const mat=new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:0.85});
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(...s),mat);
+  mesh.position.set(px,s[1]/2,pz);mesh.castShadow=true;mesh.receiveShadow=true;
+  return mesh;
+}
+
+function setCamView(v){
+  camView=v;
+  document.querySelectorAll('.cam-btn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function stopGame(msg=null){
+  gameRunning=false;
+  if(animFrame){cancelAnimationFrame(animFrame);animFrame=null;}
+  if(g3AnimFrame){cancelAnimationFrame(g3AnimFrame);g3AnimFrame=null;}
+  if(!msg)return;
+  closeShop();
+  const ov=document.getElementById('game-overlay');ov.style.display='flex';
+  ov.innerHTML=`<h2>${msg}</h2><p>Skóre: ${score} · 💵 ${playerMoney} Kč · Čas: ${elapsed}s</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+      <button class="btn btn-accent" onclick="runGame()">🔄 Znovu</button>
+      <button class="btn btn-purple" onclick="gameMode='3d';runGame()">🌐 3D</button>
+      <button class="btn btn-muted" onclick="switchTab('scene')">✏️ Upravit</button>
+    </div>`;
+  document.getElementById('game-hud').style.display='none';
+  document.getElementById('dpad').style.display='none';
+  document.getElementById('action-btns').style.display='none';
+  document.getElementById('gas-btn').style.display='none';
+  document.getElementById('cam-btns').style.display='none';
+}
+
+function rectsOverlap(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
+function spawn(x,y,color){for(let i=0;i<7;i++)particles.push({x,y,vx:(Math.random()-0.5)*4,vy:-Math.random()*5,r:2+Math.random()*2,color,life:1});}
+
+// ═══════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════
+function kd(k){keys[k]=true;}function ku(k){keys[k]=false;}
+window.addEventListener('keydown',e=>{
+  const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',' ':'up',w:'forward',s:'back',a:'a',e:'e'};
+  if(m[e.key])keys[m[e.key]]=true;
+});
+window.addEventListener('keyup',e=>{
+  const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',' ':'up',w:'forward',s:'back',a:'a',e:'e'};
+  if(m[e.key])keys[m[e.key]]=false;
+});
+
+// ═══════════════════════════════════════
+// SAVE / EXPORT
+// ═══════════════════════════════════════
+function showStatus(msg,ok=true){
+  const el=document.getElementById('status-msg');
+  el.textContent=msg;el.className='status-msg '+(ok?'status-ok':'status-err');
+  el.style.display='block';setTimeout(()=>el.style.display='none',3500);
+}
+function getProjectData(){
+  return{name:document.getElementById('proj-name').value||'Moje Hra',editorMode,objects:JSON.parse(JSON.stringify(objects)),scripts:{...DEFAULT_SCRIPTS,...savedScripts},moneySettings:{...moneySettings},shopPrices:{...shopPrices},savedAt:new Date().toLocaleString('cs-CZ'),version:'3.1'};
+}
+function saveProject(){
+  try{
+    const d=getProjectData(),k='gf31_'+Date.now();
+    const s=JSON.parse(localStorage.getItem('gf31_saves')||'{}');s[k]=d;
+    localStorage.setItem('gf31_saves',JSON.stringify(s));
+    showStatus('✅ Projekt "'+d.name+'" uložen!');refreshProjectList();
+  }catch(e){showStatus('❌ '+e.message,false);}
+}
+function refreshProjectList(){
+  const wrap=document.getElementById('project-list'),nop=document.getElementById('no-proj');
+  try{
+    const s=JSON.parse(localStorage.getItem('gf31_saves')||'{}'),keys=Object.keys(s);
+    nop.style.display=keys.length?'none':'block';
+    wrap.innerHTML=keys.reverse().map(k=>{const p=s[k];return`<div class="proj-item"><div><div class="proj-name">${p.name}</div><div class="proj-date">${p.savedAt||''} · ${(p.objects||[]).length} obj</div></div><div class="proj-btns"><button class="load-btn" onclick="loadProject('${k}')">📂</button><button class="del-btn" onclick="deleteProject('${k}')">🗑</button></div></div>`;}).join('');
+  }catch(e){}
+}
+function loadProject(key){
+  try{
+    const s=JSON.parse(localStorage.getItem('gf31_saves')||'{}'),p=s[key];if(!p)return;
+    objects=p.objects||[];nextId=objects.reduce((m,o)=>Math.max(m,o.id+1),1);
+    savedScripts=p.scripts||{};
+    if(p.moneySettings){Object.assign(moneySettings,p.moneySettings);}
+    if(p.shopPrices){Object.assign(shopPrices,p.shopPrices);}
+    editorMode=p.editorMode||'2d';
+    document.getElementById('proj-name').value=p.name;
+    selectedObj=null;renderObjectList();drawScene2D();
+    showStatus('✅ Načteno: "'+p.name+'"');switchTab('scene');
+  }catch(e){showStatus('❌ '+e.message,false);}
+}
+function deleteProject(key){
+  if(!confirm('Smazat projekt?'))return;
+  const s=JSON.parse(localStorage.getItem('gf31_saves')||'{}');
+  delete s[key];localStorage.setItem('gf31_saves',JSON.stringify(s));
+  refreshProjectList();showStatus('🗑 Smazáno.');
+}
+function updateStats(){
+  const c=Object.values({...DEFAULT_SCRIPTS,...savedScripts}).join('').length;
+  document.getElementById('stats-panel').innerHTML=`Objekty: <b style="color:var(--accent)">${objects.length}</b> · Kód: <b style="color:var(--accent)">${c}</b> zn · Peníze start: <b style="color:var(--accent3)">${moneySettings.startMoney} Kč</b>`;
+}
+function dlFile(n,c,m){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:m}));a.download=n;a.click();}
+function exportJSON(){const d=getProjectData(),n=(d.name||'hra').replace(/\s+/g,'_');dlFile(n+'.gf3.json',JSON.stringify(d,null,2),'application/json');showStatus('📄 JSON exportován!');}
+function exportHTML(){const d=getProjectData(),n=(d.name||'hra').replace(/\s+/g,'_');dlFile(n+'.html','<!-- GameForge v3.1 Export -->\n<!-- Otevři v prohlížeči a hraj! -->\n'+document.documentElement.outerHTML,'text/html');showStatus('🌐 HTML exportováno!');}
+function exportUnity(){
+  const d=getProjectData(),n=(d.name||'hra').replace(/\s+/g,'_');
+  let cs=`// GameForge v3.1 Unity Export – ${d.name}\nusing UnityEngine;\npublic class ${n.replace(/\W/g,'')}Scene : MonoBehaviour {\n    void Start() {\n`;
+  d.objects.forEach(o=>{cs+=`        var obj_${o.id} = new GameObject("${o.name}"); // ${o.type}\n        obj_${o.id}.transform.position = new Vector3(${(o.x/50).toFixed(2)}f, ${(-o.y/50).toFixed(2)}f, 0f);\n\n`;});
+  cs+=`    }\n}\n`;
+  dlFile(n+'_Scene.cs',cs,'text/plain');showStatus('🎮 Unity C# exportován!');
+}
+function newProject(){
+  if(objects.length&&!confirm('Smazat vše?'))return;
+  objects=[];selectedObj=null;nextId=1;savedScripts={};
+  Object.assign(moneySettings,{startMoney:0,maxMoney:999999,coinValue:10,gemValue:25,difficulty:1});
+  renderObjectList();drawScene2D();switchTab('scene');
+}
+
+// INIT
+window.addEventListener('resize',()=>{
+  if(currentTab==='scene'&&editorMode!=='3d')drawScene2D();
+  if(g3Renderer&&gameMode==='3d'){const w=document.getElementById('game-canvas-3d');g3Renderer.setSize(w.clientWidth,w.clientHeight);if(g3Camera)g3Camera.aspect=w.clientWidth/w.clientHeight,g3Camera.updateProjectionMatrix();}
+});
+setTimeout(()=>{
+  drawScene2D();initCodePanel();refreshProjectList();initPCBuilder();
+},200);
+
+// ═══════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════
+let settings={
+  gameMode:'2d', editorMode:'2d', camView:'follow', camDist:9,
+  gravity:0.45, startLives:3, carCollision:true,
+  shadows:true, fog:true, quality:'medium',
+  sfx:true, volume:0.5, pcBuilder:true
+};
+
+function refreshSettingsPanel(){
+  // Game mode
+  setToggle('game',settings.gameMode==='3d'?'3d':'2d');
+  document.getElementById('set-game-2d').classList.toggle('active',settings.gameMode==='2d');
+  document.getElementById('set-game-3d').classList.toggle('active',settings.gameMode==='3d');
+  // Editor mode
+  ['2d','3d','iso'].forEach(m=>{
+    const el=document.getElementById('set-ed-'+m);
+    if(el)el.classList.toggle('active',settings.editorMode===m);
+  });
+  const camSel=document.getElementById('set-cam-view');
+  if(camSel)camSel.value=settings.camView;
+  document.getElementById('set-cam-dist').value=settings.camDist;
+  document.getElementById('cam-dist-val').textContent=settings.camDist;
+  document.getElementById('set-gravity').value=settings.gravity;
+  document.getElementById('grav-val').textContent=settings.gravity;
+  document.getElementById('set-quality').value=settings.quality;
+  document.getElementById('set-vol').value=settings.volume;
+}
+
+function setGameModeSetting(m){
+  settings.gameMode=m;
+  document.getElementById('set-game-2d').classList.toggle('active',m==='2d');
+  document.getElementById('set-game-3d').classList.toggle('active',m==='3d');
+}
+function setEditorSetting(m){
+  settings.editorMode=m;
+  ['2d','3d','iso'].forEach(mm=>{
+    const el=document.getElementById('set-ed-'+mm);
+    if(el)el.classList.toggle('active',mm===m);
+  });
+}
+function setToggle(name,val){
+  const on=document.getElementById('set-'+name+'-on');
+  const off=document.getElementById('set-'+name+'-off');
+  if(on)on.classList.toggle('active',val==='on'||val===true);
+  if(off)off.classList.toggle('active',val==='off'||val===false);
+}
+function highlightLives(n){
+  settings.startLives=n;
+  document.querySelectorAll('.toggle-opt').forEach(el=>{
+    if(['1','3','5','∞'].includes(el.textContent))el.classList.remove('active');
+  });
+}
+function applySettings(){
+  gameMode=settings.gameMode;
+  editorMode=settings.editorMode;
+  camView=settings.camView||'follow';
+  setEditorMode(settings.editorMode);
+  lives=settings.startLives;
+  showSettingsStatus('✅ Nastavení použito! Herní režim: '+settings.gameMode.toUpperCase());
+}
+function showSettingsStatus(msg){
+  const btn=document.querySelector('.settings-apply-btn');
+  const orig=btn.textContent;
+  btn.textContent=msg;btn.style.background='linear-gradient(135deg,#00c853,#00695c)';
+  setTimeout(()=>{btn.textContent=orig;btn.style.background='';},2200);
+}
+
+// ═══════════════════════════════════════
+// PC BUILDER – CATALOG
+// ═══════════════════════════════════════
+const PC_PARTS={
+  cpu:[
+    {id:'i3',name:'Intel Core i3-12100',icon:'🔵',price:120,perf:25,specs:'4 jádra / 8 vláken\n3.3 GHz base / 4.3 GHz boost\nSocket LGA1700',stat:'cpu'},
+    {id:'i5',name:'Intel Core i5-13600K',icon:'🔵',price:280,perf:58,specs:'14 jader / 20 vláken\n3.5 GHz base / 5.1 GHz boost\nSocket LGA1700',stat:'cpu'},
+    {id:'i7',name:'Intel Core i7-13700K',icon:'🔵',price:420,perf:78,specs:'16 jader / 24 vláken\n3.4 GHz base / 5.4 GHz boost\nSocket LGA1700',stat:'cpu'},
+    {id:'i9',name:'Intel Core i9-13900K',icon:'🔵',price:590,perf:95,specs:'24 jader / 32 vláken\n3.0 GHz base / 5.8 GHz boost\nSocket LGA1700',stat:'cpu'},
+    {id:'r5',name:'AMD Ryzen 5 7600X',icon:'🔴',price:250,perf:55,specs:'6 jader / 12 vláken\n4.7 GHz base / 5.3 GHz boost\nSocket AM5',stat:'cpu'},
+    {id:'r7',name:'AMD Ryzen 7 7800X3D',icon:'🔴',price:400,perf:82,specs:'8 jader / 16 vláken\n4.5 GHz base / 5.0 GHz boost\n3D V-Cache',stat:'cpu'},
+    {id:'r9',name:'AMD Ryzen 9 7950X',icon:'🔴',price:680,perf:100,specs:'16 jader / 32 vláken\n4.5 GHz base / 5.7 GHz boost\nSocket AM5',stat:'cpu'},
+  ],
+  gpu:[
+    {id:'rx6600',name:'AMD RX 6600',icon:'🟥',price:190,perf:30,specs:'8 GB GDDR6\n1626 MHz / 2491 MHz\n128-bit bus',stat:'gpu'},
+    {id:'rtx3060',name:'NVIDIA RTX 3060',icon:'🟩',price:280,perf:42,specs:'12 GB GDDR6\n1320 MHz / 1777 MHz\n192-bit bus',stat:'gpu'},
+    {id:'rtx3070',name:'NVIDIA RTX 3070',icon:'🟩',price:400,perf:60,specs:'8 GB GDDR6\n1500 MHz / 1725 MHz\n256-bit bus',stat:'gpu'},
+    {id:'rx6800xt',name:'AMD RX 6800 XT',icon:'🟥',price:480,perf:65,specs:'16 GB GDDR6\n1825 MHz / 2250 MHz\n256-bit bus',stat:'gpu'},
+    {id:'rtx4070',name:'NVIDIA RTX 4070',icon:'🟩',price:580,perf:75,specs:'12 GB GDDR6X\n1920 MHz / 2475 MHz\n192-bit bus',stat:'gpu'},
+    {id:'rx7900xt',name:'AMD RX 7900 XT',icon:'🟥',price:750,perf:85,specs:'20 GB GDDR6\n2000 MHz / 2400 MHz\n320-bit bus',stat:'gpu'},
+    {id:'rtx4090',name:'NVIDIA RTX 4090',icon:'🟩',price:1400,perf:100,specs:'24 GB GDDR6X\n2235 MHz / 2520 MHz\n384-bit bus',stat:'gpu'},
+  ],
+  ram:[
+    {id:'8gb',name:'8 GB DDR4-3200',icon:'💾',price:25,perf:20,specs:'Jednokanálový\nCL16 latence\nDDR4',stat:'ram'},
+    {id:'16gb',name:'16 GB DDR4-3600',icon:'💾',price:45,perf:45,specs:'Dvoukanálový\nCL18 latence\nDDR4',stat:'ram'},
+    {id:'32gb',name:'32 GB DDR5-5600',icon:'💾',price:90,perf:70,specs:'Dvoukanálový\nCL36 latence\nDDR5',stat:'ram'},
+    {id:'64gb',name:'64 GB DDR5-6000',icon:'💾',price:180,perf:90,specs:'Čtyřkanálový\nCL30 latence\nDDR5 XMP',stat:'ram'},
+    {id:'128gb',name:'128 GB DDR5-6400',icon:'💾',price:350,perf:100,specs:'Čtyřkanálový\nCL32 latence\nDDR5 EXPO',stat:'ram'},
+  ],
+  ssd:[
+    {id:'hdd1',name:'1 TB HDD SATA',icon:'💿',price:30,perf:10,specs:'7200 RPM\n560 MB/s čtení\n3.5" SATA III',stat:'ssd'},
+    {id:'ssd500',name:'500 GB SSD SATA',icon:'💿',price:50,perf:30,specs:'2D NAND\n560 MB/s čtení\n2.5" SATA III',stat:'ssd'},
+    {id:'nvme1',name:'1 TB NVMe PCIe 3.0',icon:'⚡',price:70,perf:55,specs:'M.2 2280\n3500 MB/s čtení\nTLC NAND',stat:'ssd'},
+    {id:'nvme2',name:'2 TB NVMe PCIe 4.0',icon:'⚡',price:130,perf:78,specs:'M.2 2280\n7000 MB/s čtení\nTLC NAND',stat:'ssd'},
+    {id:'nvme4',name:'4 TB NVMe PCIe 5.0',icon:'⚡',price:300,perf:100,specs:'M.2 2280\n12000 MB/s čtení\nMLC NAND',stat:'ssd'},
+  ],
+  cool:[
+    {id:'stock',name:'Stock chladič',icon:'❄️',price:0,perf:15,specs:'Dodávaný s CPU\nAl žebra\nPWM ventilátor',stat:'cool'},
+    {id:'air120',name:'Air Cooler 120mm',icon:'🌀',price:25,perf:35,specs:'1x 120mm ventilátor\nHeatpipe technologie\nDo 125W TDP',stat:'cool'},
+    {id:'air240',name:'Air Cooler Tower 240mm',icon:'🌀',price:55,perf:55,specs:'Dual 120mm\n6x heatpipe\nDo 200W TDP',stat:'cool'},
+    {id:'aio240',name:'AIO Liquid 240mm',icon:'💧',price:90,perf:72,specs:'2x 120mm radiátor\nAIOV3 pumpa\nDo 250W TDP',stat:'cool'},
+    {id:'aio360',name:'AIO Liquid 360mm',icon:'💧',price:140,perf:88,specs:'3x 120mm radiátor\nHigh-perf pumpa\nDo 320W TDP',stat:'cool'},
+    {id:'custom',name:'Custom Loop 480mm',icon:'🔧',price:350,perf:100,specs:'Vlastní okruh\n4x 120mm radiátor\nNeomezený TDP',stat:'cool'},
+  ],
+  case:[
+    {id:'mini',name:'Mini-ITX skříň',icon:'🖥️',price:40,perf:50,specs:'Mini-ITX formát\nKompaktní design\n1x 120mm slot',stat:'case'},
+    {id:'mid',name:'Mid-Tower ATX',icon:'🖥️',price:70,perf:70,specs:'ATX formát\n2x 140mm + 1x 120mm\nTempered Glass',stat:'case'},
+    {id:'full',name:'Full-Tower E-ATX',icon:'🖥️',price:120,perf:85,specs:'E-ATX formát\nAž 6x 140mm\nDual tempered glass',stat:'case'},
+    {id:'rgb',name:'RGB Show Case',icon:'✨',price:160,perf:90,specs:'ATX s full RGB\nARGB kontroler\nTrojité sklo',stat:'case'},
+    {id:'server',name:'Server Rack Case',icon:'🗄️',price:250,perf:100,specs:'E-ATX rack 4U\n10x ventilátor slot\nProfesionální build',stat:'case'},
+  ],
+};
+
+// PC Builder state
+let pcBuilt={cpu:null,gpu:null,ram:null,ssd:null,cool:null,case:null};
+let pcBudget=0;
+
+function initPCBuilder(){
+  // Render all part grids
+  Object.entries(PC_PARTS).forEach(([cat,parts])=>{
+    const el=document.getElementById('pc-'+cat+'-items');
+    if(!el)return;
+    el.innerHTML=parts.map(p=>`
+      <div class="pc-item" id="pci-${p.id}" onclick="selectPCPart('${cat}','${p.id}')">
+        <div class="pc-icon">${p.icon}</div>
+        <div class="pc-name">${p.name}</div>
+        <div class="pc-specs">${p.specs.replace(/\n/g,'<br>')}</div>
+        <div class="pc-price">💵 ${p.price} Kč</div>
+        <div class="pc-perf">
+          <div class="pc-bar-bg"><div class="pc-bar" style="width:${p.perf}%;background:${getPerfColor(p.perf)}"></div></div>
+          <span style="font-size:0.6em;color:var(--muted);min-width:28px">${p.perf}%</span>
+        </div>
+      </div>`).join('');
+  });
+}
+
+function getPerfColor(perf){
+  if(perf>=80)return'#00f5d4';
+  if(perf>=55)return'#ffd60a';
+  if(perf>=30)return'#ff9100';
+  return'#f72585';
+}
+
+function openPCBuilder(){
+  pcBudget=playerMoney;
+  document.getElementById('pc-builder').style.display='flex';
+  document.getElementById('pcb-budget-header').textContent='💵 '+pcBudget+' Kč';
+  document.getElementById('pcb-remaining').textContent=pcBudget;
+  document.getElementById('pcb-total').textContent='0';
+  document.getElementById('pc-built-badge').style.display='none';
+  // Reset selections
+  pcBuilt={cpu:null,gpu:null,ram:null,ssd:null,cool:null,case:null};
+  document.querySelectorAll('.pc-item').forEach(el=>el.classList.remove('selected'));
+  ['cpu','gpu','ram','ssd','cool','case'].forEach(c=>{
+    document.getElementById('sel-'+c).textContent='— Nevybráno —';
+  });
+  updatePCStats();
+}
+
+function closePCBuilder(){
+  document.getElementById('pc-builder').style.display='none';
+}
+
+function closePCBuilderAfterBuild(){
+  document.getElementById('pc-builder').style.display='none';
+  // Bonus: give player XP and speed boost for building PC
+  score+=500;
+  spawn(100,100,'#00f5d4');
+  document.getElementById('hud-score').textContent='⭐ '+score;
+}
+
+function togglePCSection(cat){
+  const el=document.getElementById('pc-'+cat+'-items');
+  if(el) el.style.display=el.style.display==='none'?'grid':'none';
+}
+
+function selectPCPart(cat,id){
+  const part=PC_PARTS[cat].find(p=>p.id===id);
+  if(!part)return;
+  // Check budget
+  const currentCost=getPCTotalCost();
+  const currentPartCost=pcBuilt[cat]?PC_PARTS[cat].find(p=>p.id===pcBuilt[cat]).price:0;
+  const newTotal=currentCost-currentPartCost+part.price;
+  if(newTotal>pcBudget){
+    // Flash red
+    const el=document.getElementById('pci-'+id);
+    if(el){el.style.borderColor='var(--accent2)';setTimeout(()=>el.style.borderColor='',800);}
+    document.getElementById('pcb-remaining').style.color='var(--accent2)';
+    setTimeout(()=>document.getElementById('pcb-remaining').style.color='',1200);
+    return;
+  }
+  // Deselect previous in same category
+  if(pcBuilt[cat]){
+    const prev=document.getElementById('pci-'+pcBuilt[cat]);
+    if(prev)prev.classList.remove('selected');
+  }
+  pcBuilt[cat]=id;
+  const el=document.getElementById('pci-'+id);
+  if(el)el.classList.add('selected');
+  // Update label
+  document.getElementById('sel-'+cat).textContent=part.name+' – 💵'+part.price;
+  updatePCStats();
+}
+
+function getPCTotalCost(){
+  return Object.entries(pcBuilt).reduce((sum,[cat,id])=>{
+    if(!id)return sum;
+    const part=PC_PARTS[cat].find(p=>p.id===id);
+    return sum+(part?part.price:0);
+  },0);
+}
+
+function updatePCStats(){
+  const total=getPCTotalCost();
+  document.getElementById('pcb-total').textContent=total;
+  document.getElementById('pcb-remaining').textContent=pcBudget-total;
+
+  // Compute stats
+  const stats={cpu:0,gpu:0,ram:0,ssd:0,cool:0};
+  Object.entries(pcBuilt).forEach(([cat,id])=>{
+    if(!id||cat==='case')return;
+    const part=PC_PARTS[cat].find(p=>p.id===id);
+    if(part&&stats[cat]!==undefined)stats[cat]=part.perf;
+  });
+
+  // Apply cooling penalty if no cooling
+  if(!pcBuilt.cool)stats.cpu=Math.round(stats.cpu*0.7);
+
+  // Update bars
+  Object.entries(stats).forEach(([stat,val])=>{
+    const bar=document.getElementById('stat-'+stat);
+    const label=document.getElementById('stat-'+stat+'-val');
+    if(bar)bar.style.width=val+'%';
+    if(label)label.textContent=val+'%';
+    if(bar)bar.style.background=getPerfColor(val);
+  });
+
+  // Enable build button only if all essential parts selected
+  const essential=['cpu','gpu','ram','ssd'];
+  const allSelected=essential.every(c=>pcBuilt[c]);
+  const buildBtn=document.getElementById('pc-build-btn');
+  if(buildBtn){
+    buildBtn.disabled=!allSelected;
+    buildBtn.textContent=allSelected?'🔧 SESTAVIT PC':'⚠️ Vyber CPU, GPU, RAM, SSD';
+  }
+}
+
+function buildPC(){
+  const total=getPCTotalCost();
+  if(total>playerMoney){return;}
+  playerMoney-=total;
+  document.getElementById('hud-money').textContent='💵 '+playerMoney;
+
+  // Calculate overall score
+  const parts=Object.entries(pcBuilt).filter(([c,id])=>id&&c!=='case');
+  const avgPerf=Math.round(parts.reduce((s,[cat,id])=>{
+    const p=PC_PARTS[cat].find(p=>p.id===id);return s+(p?p.perf:0);
+  },0)/parts.length);
+
+  const grade=avgPerf>=85?'S – Herní monstrum! 🏆':avgPerf>=65?'A – Výborné PC! 🥇':avgPerf>=45?'B – Solidní sestava 👍':'C – Základní PC';
+  const bonus=Math.round(avgPerf*5);
+  score+=bonus;
+
+  // Show badge
+  const badge=document.getElementById('pc-built-badge');
+  document.getElementById('pc-built-desc').innerHTML=
+    `Hodnocení: <b>${grade}</b><br>
+     Průměrný výkon: <b>${avgPerf}%</b><br>
+     Cena: <b>💵 ${total} Kč</b><br>
+     Bonus skóre: <b>+${bonus} ⭐</b>`;
+  badge.style.display='block';
+
+  // Particle burst
+  for(let i=0;i<3;i++)setTimeout(()=>spawn(Math.random()*200+50,200,'#00f5d4'),i*200);
+}
+
+
+
+// ═══════════════════════════════════════
+// PAINT CANVAS
+// ═══════════════════════════════════════
+const PAINT_COLORS=['#00f5d4','#f72585','#ffd60a','#7b2fff','#00b0ff','#00e676','#ff6d00','#ff99cc','#fff','#111','#a07040','#555'];
+let paintTool='brush', paintColor='#00f5d4', paintBrushSize=8;
+let paintDrawing=false, paintLastX=0, paintLastY=0, paintLineStart=null;
+let paintInited=false;
+
+function initPaintCanvas(){
+  const wrap=document.getElementById('paint-canvas-wrap');
+  const canvas=document.getElementById('paint-canvas');
+  if(!wrap||!canvas)return;
+  canvas.width=wrap.clientWidth||320;
+  canvas.height=wrap.clientHeight||380;
+  if(!paintInited){
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#0a0a18';ctx.fillRect(0,0,canvas.width,canvas.height);
+    paintInited=true;
+  }
+  const container=document.getElementById('paint-colors');
+  if(container&&!container.children.length){
+    container.innerHTML=PAINT_COLORS.map((c,i)=>
+      `<div class="paint-color ${i===0?'selected':''}" style="background:${c};width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;flex-shrink:0;" onclick="selectPaintColor('${c}',this)"></div>`
+    ).join('');
+  }
+  setupPaintEvents(canvas);
+}
+
+function selectPaintColor(c,el){
+  paintColor=c;
+  document.querySelectorAll('#paint-colors div').forEach(e=>e.style.borderColor='transparent');
+  if(el)el.style.borderColor='#fff';
+}
+
+function setPaintTool(t){
+  paintTool=t;
+  document.querySelectorAll('.paint-tool-btn').forEach(b=>b.classList.remove('active'));
+  const el=document.getElementById('pt-'+t);if(el)el.classList.add('active');
+}
+
+function setupPaintEvents(canvas){
+  canvas.onpointerdown=e=>{
+    paintDrawing=true;canvas.setPointerCapture(e.pointerId);
+    const r=canvas.getBoundingClientRect();
+    const x=(e.clientX-r.left)*(canvas.width/r.width);
+    const y=(e.clientY-r.top)*(canvas.height/r.height);
+    paintLastX=x;paintLastY=y;
+    if(paintTool==='fill'){floodFill(canvas,x|0,y|0,paintColor);return;}
+    if(paintTool==='line'||paintTool==='rect'||paintTool==='circle'){paintLineStart={x,y};return;}
+    paintDot(canvas,x,y);
+  };
+  canvas.onpointermove=e=>{
+    if(!paintDrawing)return;
+    const r=canvas.getBoundingClientRect();
+    const x=(e.clientX-r.left)*(canvas.width/r.width);
+    const y=(e.clientY-r.top)*(canvas.height/r.height);
+    if(paintTool==='brush'||paintTool==='eraser')paintLine(canvas,paintLastX,paintLastY,x,y);
+    paintLastX=x;paintLastY=y;
+  };
+  canvas.onpointerup=e=>{
+    if(!paintDrawing){paintDrawing=false;return;}
+    const r=canvas.getBoundingClientRect();
+    const x=(e.clientX-r.left)*(canvas.width/r.width);
+    const y=(e.clientY-r.top)*(canvas.height/r.height);
+    const ctx=canvas.getContext('2d');
+    ctx.strokeStyle=paintColor;ctx.lineWidth=paintBrushSize;ctx.lineCap='round';ctx.fillStyle=paintColor+'33';
+    if(paintTool==='line'&&paintLineStart){ctx.beginPath();ctx.moveTo(paintLineStart.x,paintLineStart.y);ctx.lineTo(x,y);ctx.stroke();}
+    if(paintTool==='rect'&&paintLineStart){ctx.beginPath();ctx.roundRect(Math.min(paintLineStart.x,x),Math.min(paintLineStart.y,y),Math.abs(x-paintLineStart.x),Math.abs(y-paintLineStart.y),4);ctx.fill();ctx.stroke();}
+    if(paintTool==='circle'&&paintLineStart){const rad=Math.sqrt(Math.pow(x-paintLineStart.x,2)+Math.pow(y-paintLineStart.y,2));ctx.beginPath();ctx.arc(paintLineStart.x,paintLineStart.y,rad,0,Math.PI*2);ctx.fill();ctx.stroke();}
+    paintDrawing=false;paintLineStart=null;
+  };
+}
+
+function paintDot(canvas,x,y){
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle=paintTool==='eraser'?'#0a0a18':paintColor;
+  ctx.beginPath();ctx.arc(x,y,paintBrushSize/2,0,Math.PI*2);ctx.fill();
+}
+function paintLine(canvas,x1,y1,x2,y2){
+  const ctx=canvas.getContext('2d');
+  ctx.strokeStyle=paintTool==='eraser'?'#0a0a18':paintColor;
+  ctx.lineWidth=paintBrushSize;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+}
+function floodFill(canvas,sx,sy,fillColor){
+  const ctx=canvas.getContext('2d');
+  const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+  const data=imgData.data;
+  const idx=(x,y)=>(y*canvas.width+x)*4;
+  const hex=fillColor.replace('#','');
+  const fr=parseInt(hex.substr(0,2),16),fg=parseInt(hex.substr(2,2),16),fb=parseInt(hex.substr(4,2),16);
+  const si=idx(sx,sy);
+  const tr=data[si],tg=data[si+1],tb=data[si+2];
+  if(tr===fr&&tg===fg&&tb===fb)return;
+  const stack=[[sx,sy]];const visited=new Set();
+  while(stack.length){
+    const[cx,cy]=stack.pop();
+    if(cx<0||cy<0||cx>=canvas.width||cy>=canvas.height)continue;
+    const key=cy*canvas.width+cx;if(visited.has(key))continue;visited.add(key);
+    const i=idx(cx,cy);
+    if(data[i]!==tr||data[i+1]!==tg||data[i+2]!==tb)continue;
+    data[i]=fr;data[i+1]=fg;data[i+2]=fb;data[i+3]=255;
+    stack.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+  }
+  ctx.putImageData(imgData,0,0);
+}
+function clearPaintCanvas(){
+  const canvas=document.getElementById('paint-canvas');
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#0a0a18';ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+function savePaintAsObject(){
+  const canvas=document.getElementById('paint-canvas');
+  const dataUrl=canvas.toDataURL();
+  const wrap=document.getElementById('scene-wrap');
+  const o={id:nextId++,type:'custom',x:Math.round(wrap.clientWidth/2-40),y:Math.round(wrap.clientHeight/2-40),w:80,h:80,color:'#fff',name:'Malba '+nextId,customSprite:dataUrl};
+  objects.push(o);renderObjectList();drawScene2D();
+  switchTab('scene');
+  showStatus&&showStatus('✅ Malba přidána do scény!');
+}
+function downloadPaint(){
+  const canvas=document.getElementById('paint-canvas');
+  const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='gameforge-malba.png';a.click();
+}
+
+// ═══════════════════════════════════════
+// CHAR EDITOR
+// ═══════════════════════════════════════
+const CHAR_COLORS=['#00f5d4','#f72585','#ffd60a','#7b2fff','#00b0ff','#00e676','#ff6d00','#ff99cc','#7dff6b','#fff','#aaa','#a07040'];
+let charType='player';
+let charBodyColor='#00f5d4', charHeadColor='#e0b080', charLegColor='#006655';
+let mechanics={doublejump:false,dash:false,wallclimb:false,fly:false,attack:false,pickup:true,swim:false,invisible:false};
+
+function initCharEditor(){
+  const makeSwatches=(id,current,fn)=>{
+    const el=document.getElementById(id);
+    if(!el||el.children.length)return;
+    el.innerHTML=CHAR_COLORS.map(c=>`<div class="char-swatch ${c===current?'selected':''}" style="background:${c}" onclick="${fn}('${c}',this)"></div>`).join('');
+  };
+  makeSwatches('char-body-colors',charBodyColor,'setCharBodyColor');
+  makeSwatches('char-head-colors',charHeadColor,'setCharHeadColor');
+  makeSwatches('char-leg-colors',charLegColor,'setCharLegColor');
+  updateCharPreview();
+}
+function setCharBodyColor(c,el){charBodyColor=c;document.querySelectorAll('#char-body-colors .char-swatch').forEach(e=>e.classList.remove('selected'));el&&el.classList.add('selected');updateCharPreview();}
+function setCharHeadColor(c,el){charHeadColor=c;document.querySelectorAll('#char-head-colors .char-swatch').forEach(e=>e.classList.remove('selected'));el&&el.classList.add('selected');updateCharPreview();}
+function setCharLegColor(c,el){charLegColor=c;document.querySelectorAll('#char-leg-colors .char-swatch').forEach(e=>e.classList.remove('selected'));el&&el.classList.add('selected');updateCharPreview();}
+function setCharType(t,el){
+  charType=t;
+  document.querySelectorAll('.char-type-btn').forEach(b=>b.classList.remove('active'));
+  el&&el.classList.add('active');
+  updateCharPreview();
+}
+function toggleMechanic(m){
+  mechanics[m]=!mechanics[m];
+  const el=document.getElementById('mech-'+m);
+  if(el){el.textContent=mechanics[m]?'ZAP':'VYP';el.classList.toggle('on',mechanics[m]);}
+}
+function updateCharPreview(){
+  const canvas=document.getElementById('char-preview-canvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,200,200);
+  ctx.fillStyle='#0a0a18';ctx.fillRect(0,0,200,200);
+  const h=parseInt(document.getElementById('char-height')?.value)||55;
+  const bw=parseInt(document.getElementById('char-width')?.value)||14;
+  const hs=parseInt(document.getElementById('char-head')?.value)||11;
+  const cx=100,by=155;
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.beginPath();ctx.ellipse(cx,by+4,12,3,0,0,Math.PI*2);ctx.fill();
+  // Legs
+  ctx.strokeStyle=charLegColor;ctx.lineWidth=bw*0.28;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(cx-bw*0.35,by-h*0.28);ctx.lineTo(cx-bw*0.45,by);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+bw*0.35,by-h*0.28);ctx.lineTo(cx+bw*0.45,by);ctx.stroke();
+  // Arms
+  ctx.strokeStyle=charBodyColor;ctx.lineWidth=bw*0.25;
+  ctx.beginPath();ctx.moveTo(cx,by-h*0.5);ctx.lineTo(cx-bw*0.9,by-h*0.38);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,by-h*0.5);ctx.lineTo(cx+bw*0.9,by-h*0.38);ctx.stroke();
+  // Body
+  ctx.strokeStyle=charBodyColor;ctx.lineWidth=bw*0.38;
+  ctx.beginPath();ctx.moveTo(cx,by-h*0.28);ctx.lineTo(cx,by-h*0.72);ctx.stroke();
+  // Head
+  ctx.fillStyle=charHeadColor+'55';ctx.strokeStyle=charHeadColor;ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(cx,by-h*0.78-hs,hs,0,Math.PI*2);ctx.fill();ctx.stroke();
+  // Eyes
+  ctx.fillStyle=charHeadColor;
+  ctx.beginPath();ctx.arc(cx-hs*0.35,by-h*0.78-hs+2,hs*0.18,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx+hs*0.35,by-h*0.78-hs+2,hs*0.18,0,Math.PI*2);ctx.fill();
+  // Name & type
+  ctx.font='bold 12px Rajdhani,sans-serif';ctx.fillStyle='#dde1ff';ctx.textAlign='center';
+  ctx.fillText(document.getElementById('char-name')?.value||'Postava',cx,by+18);
+  const tc={player:'#00f5d4',npc:'#7b2fff',enemy:'#f72585',zombie:'#7dff6b'};
+  ctx.fillStyle=tc[charType]||'#aaa';ctx.font='bold 9px Orbitron,sans-serif';
+  ctx.fillText(charType.toUpperCase(),cx,by+30);
+  // Mechanic badges
+  const active=Object.entries(mechanics).filter(([,v])=>v).map(([k])=>k);
+  ctx.font='8px Rajdhani,sans-serif';ctx.fillStyle='var(--accent4)';
+  active.slice(0,4).forEach((m,i)=>{ctx.fillStyle='#7b2fff';ctx.fillText('✦'+m,cx+(i%2===0?-45:5),by+42+Math.floor(i/2)*12);});
+}
+function saveCharToScene(){
+  const h=parseInt(document.getElementById('char-height')?.value)||55;
+  const speed=parseInt(document.getElementById('char-speed')?.value)||3;
+  const jump=parseInt(document.getElementById('char-jump')?.value)||9;
+  const charLivesVal=parseInt(document.getElementById('char-lives')?.value)||3;
+  const dialog=document.getElementById('char-dialog')?.value||'Ahoj!';
+  const behavior=document.getElementById('char-behavior')?.value||'idle';
+  const name=document.getElementById('char-name')?.value||'Postava';
+  const wrap=document.getElementById('scene-wrap');
+  const canvas=document.getElementById('char-preview-canvas');
+  const o={
+    id:nextId++,type:charType,
+    x:Math.round(40+Math.random()*(Math.max(wrap.clientWidth-80,40))),
+    y:Math.round(40+Math.random()*(Math.max(wrap.clientHeight-200,40))),
+    w:28,h:h,speed,jump,lives:charLivesVal,dialog,behavior,
+    color:charBodyColor,headColor:charHeadColor,legColor:charLegColor,
+    headSize:parseInt(document.getElementById('char-head')?.value)||11,
+    bodyWidth:parseInt(document.getElementById('char-width')?.value)||14,
+    mechanics:{...mechanics},name,customChar:true,
+    customSprite:canvas?canvas.toDataURL():null
+  };
+  objects.push(o);renderObjectList();drawScene2D();
+  switchTab('scene');
+}
+
+
+// ── INLINE FROM script.js ──
+// ============================================================
+// GAMEFORGE v5 – script.js
+// AI Chat, Notifications, Button helpers, Utilities
+// ============================================================
+
+// ── NOTIFICATION SYSTEM ──────────────────────────────────────
+const NOTIFICATIONS = [
+  { msg: "Pojď si udělat hru přes GameForge Engine! 🚀", delay: 3000 },
+  { msg: "Nová funkce: Editor postav a malování! 🎨", delay: 30000 },
+  { msg: "Sdílej svůj projekt přes export HTML! 🌐", delay: 90000 },
+  { msg: "Přidej 3D objekty a hraj v Three.js režimu! 🖥️", delay: 180000 },
+];
+
+let notifIndex = 0;
+function showNotification(msg, duration = 6000) {
+  const el = document.getElementById('gf-notification');
+  const msgEl = document.getElementById('notif-msg');
+  if (!el || !msgEl) return;
+  msgEl.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+function closeNotification() {
+  document.getElementById('gf-notification')?.classList.remove('show');
+}
+function openGithub() {
+  window.open('https://github.com/', '_blank');
+  closeNotification();
+}
+function scheduleNotifications() {
+  NOTIFICATIONS.forEach(({ msg, delay }) => {
+    setTimeout(() => showNotification(msg), delay);
+  });
+}
+
+// ── AI CHAT SYSTEM ──────────────────────────────────────────
+let aiHistory = [];
+let aiTyping = false;
+
+// GameForge knowledge base for offline fallback
+const GF_KB = {
+  'nepřítel': "Nepřítele přidáš v záložce **📦 OBJEKTY** → kategorie Postavy → klikni na **👾 NEPŘÍTEL**. Ve hře se automaticky pohybuje tam a zpět a pronásleduje hráče, pokud je blízko. Chování AI nastavíš v Editoru postav (🧑 POSTAVY).",
+  'hráč': "Hráče přidáš v **📦 OBJEKTY** → 🧑 HRÁČ. Ovládáš ho D-padem (mobilní) nebo šipkami (klávesnice). Vlastnosti jako rychlost, skok a životy nastavíš v **🧑 POSTAVY** editoru.",
+  'skok': "Skok funguje přes D-pad ▲ nebo tlačítko **A** ve hře. Dvojitý skok zapneš v editoru postav (🧑 POSTAVY → Mechaniky → Dvojitý skok: ZAP). V kódu: `if((keys.up||keys.a)&&p.onGround){ p.vy=-(p.jump||9); }`",
+  'shop': "Shopy přidáš v **📦 OBJEKTY** → 🏪 SHOPY. Ve hře stiskni **E** když stojíš u obchodu. Ceny nastavíš v záložce **💵 PENÍZE** → Ceny v shopech. Po koupi Počítače se otevře PC Builder!",
+  'peníze': "Peněžní systém: přidej **💵 PENÍZE** nebo **🪙 MINCE** objekty do scény. Hráč je sbírá automaticky. Globální nastavení je v záložce **💵 PENÍZE**. Předvolby: Chudák/Normální/Boháč/Milionář.",
+  '3d': "3D mód spustíš přes tlačítko **▶ Spustit 3D** nebo v nastavení (⚙️ NASTAVENÍ → Herní režim: 3D). Editor scény přepneš na 3D v záložce 🗺 SCÉNA → tlačítko **3D EDITOR**. Kamera se dá přepínat: Follow/Vršek/Bok/Free.",
+  'export': "Export najdeš v záložce **💾 ULOŽIT**. Možnosti:\n• **HTML** – hotová hra jako soubor, otevři v prohlížeči\n• **JSON** – data projektu pro zálohu\n• **Unity C#** – skript pro Unity engine",
+  'malování': "Malování objektů je v záložce **🎨 MALOVÁNÍ**. Nástroje: štětec, výplň, guma, čára, obdélník, kruh. Hotový výkres přidáš do scény tlačítkem **+ Do scény** nebo stáhneš jako PNG.",
+  'auto': "Auta přidáš v **📦 OBJEKTY** → 🚗 AUTA. Kategorie: Auto, Truck, Závoďák, Bus, Motorka. Ve hře je ovládáš D-padem + tlačítkem ⛽ (plyn). 3D fyzika: zrychlení, tření, zatáčení.",
+  'script': "Skripty píšeš v záložce **💻 KÓD**. K dispozici jsou soubory:\n• `game.js` – hlavní logika\n• `player.js` – pohyb hráče\n• `car.js` – fyzika vozidla\n• `enemy.js` – AI nepřítele\n• `money.js` – systém peněz\nLze vytvořit vlastní skripty tlačítkem **+**.",
+  'uložit': "Projekt uložíš v záložce **💾 ULOŽIT** → tlačítko ULOŽIT. Ukládá se do paměti prohlížeče (localStorage). Načteš ho z části **Uložené projekty**. Pro zálohu použij export JSON.",
+  'postava': "Vlastní postavu vytvoříš v záložce **🧑 POSTAVY**: nastav typ (hráč/NPC/nepřítel), výšku, šířku, barvy těla/hlavy/nohou, rychlost, skok, životy a mechaniky. Pak klikni **Přidat do scény**.",
+  'mechaniky': "Mechaniky zapneš/vypneš v **🧑 POSTAVY** → sekce Mechaniky:\n• **Dvojitý skok** – skok ve vzduchu\n• **Dash** – rychlý pohyb (tlačítko B)\n• **Létání** – stiskni šipku nahoru ve vzduchu\n• **Útok** – tlačítko B\n• **Plavání** – pohyb pod vodou\n• **Šplhání** – lezení po zdech",
+  'pc builder': "PC Builder se otevře po koupi **Počítače** nebo **Notebooku** v obchodě 💻 Elektronika. Vyber CPU, GPU, RAM, SSD, chlazení – vše v rámci svého rozpočtu. Po sestavení dostaneš hodnocení S/A/B/C a bonus skóre.",
+  'kamera': "Kameru ve 3D hře přepínáš tlačítky vpravo nahoře:\n• **Follow** – kamera jde za hráčem\n• **Vršek** – pohled shora\n• **Bok** – boční pohled\n• **Free** – volná orbit kamera\nVzdálenost kamery nastav v ⚙️ NASTAVENÍ.",
+  'nastavení': "Nastavení najdeš v záložce **⚙️ NASTAVENÍ**. Možnosti: herní režim 2D/3D, pohled kamery, gravitace, životy, stíny, mlha, kvalita renderu, hlasitost, PC Builder on/off.",
+};
+
+async function sendAIMessage() {
+  if (aiTyping) return;
+  const input = document.getElementById('ai-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+  addAIMessage(text, 'user');
+  await getAIResponse(text);
+}
+
+function askAI(text) {
+  const input = document.getElementById('ai-input');
+  input.value = text;
+  sendAIMessage();
+}
+
+function addAIMessage(text, role) {
+  const msgs = document.getElementById('ai-messages');
+  const isBot = role === 'bot';
+  const div = document.createElement('div');
+  div.className = `ai-msg ${role}`;
+  div.innerHTML = `
+    <div class="ai-avatar ${role}">${isBot ? '🤖' : '👤'}</div>
+    <div class="ai-bubble ${role}">${formatAIText(text)}</div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function showTyping() {
+  const msgs = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg';
+  div.id = 'ai-typing-indicator';
+  div.innerHTML = `
+    <div class="ai-avatar bot">🤖</div>
+    <div class="ai-typing">
+      <div class="ai-dot"></div>
+      <div class="ai-dot"></div>
+      <div class="ai-dot"></div>
+    </div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function hideTyping() {
+  document.getElementById('ai-typing-indicator')?.remove();
+}
+
+function formatAIText(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+    .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+    .replace(/•\s/g, '&nbsp;• ')
+    .replace(/\n/g, '<br>');
+}
+
+// Local knowledge base lookup
+function getLocalAnswer(question) {
+  const q = question.toLowerCase();
+  for (const [key, answer] of Object.entries(GF_KB)) {
+    if (q.includes(key)) return answer;
+  }
+  return null;
+}
+
+async function getAIResponse(userMsg) {
+  aiTyping = true;
+  showTyping();
+
+  // First try local KB for instant response
+  const localAnswer = getLocalAnswer(userMsg);
+  if (localAnswer) {
+    await new Promise(r => setTimeout(r, 600));
+    hideTyping();
+    addAIMessage(localAnswer, 'bot');
+    aiHistory.push({ role: 'user', content: userMsg });
+    aiHistory.push({ role: 'assistant', content: localAnswer });
+    aiTyping = false;
+    return;
+  }
+
+  // Try Claude API
+  try {
+    const systemPrompt = `Jsi GF AI – asistent pro GameForge, mobilní herní engine. Pomáháš uživatelům s:
+- Přidáváním objektů do scény (hráč, NPC, nepřátelé, auta, shopy, peníze)
+- Psaním JavaScript kódu pro herní logiku
+- Nastavením fyziky, mechanik postav a herního systému
+- Exportem hry (HTML, JSON, Unity)
+- 2D a 3D herním módem s Three.js
+- PC Builderem, shop systémem a money systémem
+Odpovídej stručně a prakticky v češtině. Pokud jde o kód, ukaž konkrétní příklad.`;
+
+    const messages = [
+      ...aiHistory.slice(-8),
+      { role: 'user', content: userMsg }
+    ];
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages,
+      })
+    });
+
+    const data = await response.json();
+    const reply = data.content?.[0]?.text || 'Omlouvám se, nemohu odpovědět.';
+    hideTyping();
+    addAIMessage(reply, 'bot');
+    aiHistory.push({ role: 'user', content: userMsg });
+    aiHistory.push({ role: 'assistant', content: reply });
+  } catch (err) {
+    hideTyping();
+    // Fallback generic response
+    const fallbacks = [
+      "Zkus se podívat do záložky **💻 KÓD** – tam jsou připravené skripty pro herní logiku!",
+      "V záložce **📦 OBJEKTY** najdeš všechny dostupné objekty rozdělené do kategorií.",
+      "Projekt uložíš v záložce **💾 ULOŽIT** – podporuje export do HTML, JSON i Unity!",
+      "Pro 3D mód klikni na **▶ Spustit 3D** nebo nastav režim v ⚙️ NASTAVENÍ.",
+      "Vlastní postavu vytvoříš v záložce **🧑 POSTAVY** s plným nastavením mechanik.",
+    ];
+    const fb = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    addAIMessage(fb, 'bot');
+  }
+  aiTyping = false;
+}
+
+// ── BUTTON FIX – ensure all interactive elements work on mobile ──
+function fixMobileButtons() {
+  // Prevent ghost clicks
+  document.querySelectorAll('.btn, .tab, .tool-btn, .add-tile, .mode-btn, .toggle-opt, .paint-tool-btn, .char-type-btn, .mechanic-toggle, .dpad-btn, .action-btn').forEach(el => {
+    if (el.dataset.mobilFixed) return;
+    el.dataset.mobilFixed = '1';
+    el.addEventListener('touchend', e => {
+      e.preventDefault();
+      el.click();
+    }, { passive: false });
+  });
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Schedule notifications
+  scheduleNotifications();
+
+  // Fix mobile buttons after a short delay
+  setTimeout(fixMobileButtons, 500);
+
+  // Re-apply fix when new elements appear (tabs switch)
+  const observer = new MutationObserver(() => fixMobileButtons());
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Prevent context menu on long press (mobile)
+  document.addEventListener('contextmenu', e => {
+    if (e.target.closest('#game-wrap, #scene-wrap, #paint-canvas-wrap')) {
+      e.preventDefault();
+    }
+  });
+});
+
+</script>
+</body>
+</html>
